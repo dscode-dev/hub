@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
+    />
+    <title>Plataforma Hub</title>
+    <style>
+      :root {
+        --brand-600: #1665f0;
+        --brand-700: #0f4fc7;
+        --brand-900: #0b2e75;
+        --line: #e5eaf2;
+        --line-strong: #d3dbe8;
+        --muted: #526078;
+        --fg: #0f172a;
+      }
+
+      * {
+        margin: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        padding: 32px;
+        text-align: center;
+        background: #ffffff;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+        color: var(--fg);
+        -webkit-user-select: none;
+        user-select: none;
+      }
+
+      .logo {
+        width: 150px;
+        height: auto;
+        margin-bottom: 6px;
+      }
+
+      h1 {
+        font-size: 17px;
+        font-weight: 600;
+        color: var(--brand-900);
+      }
+
+      p {
+        max-width: 400px;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--muted);
+      }
+
+      .actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      button {
+        height: 38px;
+        padding: 0 18px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        font-family: inherit;
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+
+      .primary {
+        background: var(--brand-600);
+        color: #ffffff;
+      }
+
+      .primary:hover {
+        background: var(--brand-700);
+      }
+
+      .secondary {
+        background: #ffffff;
+        border-color: var(--line-strong);
+        color: var(--fg);
+      }
+
+      .secondary:hover {
+        background: #f6f8fc;
+      }
+
+      .hint {
+        margin-top: 4px;
+        font-size: 11px;
+        color: #7c8799;
+      }
+    </style>
+  </head>
+  <body>
+    <img class="logo" src="logo-hub.png" alt="Plataforma Hub" />
+
+    <h1>Nao foi possivel iniciar a Plataforma Hub</h1>
+
+    <!--
+      Linguagem de usuario final: o detalhe tecnico fica somente no arquivo de
+      log, para nao expor stack trace a quem esta no balcao.
+    -->
+    <p>
+      O servico local nao respondeu. Isso costuma ser temporario. Tente novamente e, se o
+      problema continuar, envie o arquivo de log ao suporte.
+    </p>
+
+    <div class="actions">
+      <button type="button" class="primary" id="retry">Tentar novamente</button>
+      <button type="button" class="secondary" onclick="window.close()">Fechar</button>
+    </div>
+
+    <p class="hint" id="hint">Detalhes tecnicos foram registrados em desktop.log</p>
+
+    <script>
+      // Retry de verdade: reinicia o backend pela capability do preload.
+      // Se ele voltar, o processo principal fecha esta janela e abre o app.
+      const retry = document.getElementById('retry');
+      const hint = document.getElementById('hint');
+
+      retry.addEventListener('click', async () => {
+        retry.disabled = true;
+        retry.textContent = 'Iniciando...';
+        hint.textContent = 'Reiniciando o servico local, aguarde.';
+
+        const status = await window.hub.backend.restart();
+
+        if (status.phase !== 'ready') {
+          retry.disabled = false;
+          retry.textContent = 'Tentar novamente';
+          hint.textContent = 'Ainda sem resposta. Detalhes registrados em desktop.log';
+        }
+      });
+    </script>
+  </body>
+</html>

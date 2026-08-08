@@ -5,6 +5,7 @@ import type { ProductDto } from '@hub/shared';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/common/page-header';
 import { formatCurrency } from '@/lib/format';
+import { productDetailRoute } from '@/lib/routes';
 import { SetupChecklist } from './setup-checklist';
 import type { SetupStatus } from './types';
 
@@ -80,7 +81,7 @@ export function DashboardOverview({
               {recentProducts.map((product) => (
                 <li key={product.id}>
                   <Link
-                    href={`/products/${product.id}`}
+                    href={productDetailRoute(product.id)}
                     className="flex items-center justify-between gap-4 px-5 py-3 transition-colors hover:bg-surface-muted"
                   >
                     <span className="min-w-0">

@@ -12,8 +12,12 @@ export class EnvironmentVariables {
   NODE_ENV: string = 'development';
 
   @IsInt()
-  @Transform(({ value }) => Number(value ?? 5010))
-  PORT: number = 5010;
+  @Transform(({ value }) => Number(value ?? 3001))
+  PORT: number = 3001;
+
+  @IsString()
+  @IsOptional()
+  HOST?: string;
 
   @IsString()
   DATABASE_URL!: string;

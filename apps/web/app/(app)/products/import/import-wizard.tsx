@@ -118,7 +118,6 @@ export function ImportWizard() {
 
       setResult(response);
       setStage('done');
-      router.refresh();
     } catch (commitError) {
       setError(
         commitError instanceof ApiError

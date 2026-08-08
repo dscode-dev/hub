@@ -1,29 +1,49 @@
+import { getAccessToken, refreshAccessToken } from '@/lib/auth/access-token';
+import { apiUrl } from './config';
 import { ApiError, toApiError } from './errors';
 
 /**
- * Cliente de browser. Sempre passa pelo BFF (/api/bff/*), nunca pela API direto:
- * e o BFF que conhece os tokens.
+ * Cliente HTTP do renderer.
+ *
+ * Fala direto com o NestJS local em loopback - no desktop nao existe mais o
+ * BFF do Next. O access token e injetado aqui, e um 401 dispara uma unica
+ * tentativa de renovacao antes de propagar o erro.
  */
-const BFF_PREFIX = '/api/bff';
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${BFF_PREFIX}${path}`, {
-    ...init,
-    headers: {
-      accept: 'application/json',
-      ...init.headers,
-    },
-  });
+interface RequestOptions extends RequestInit {
+  /** Interno: impede repetir o refresh em looping. */
+  retried?: boolean;
+}
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const { retried, ...init } = options;
+  const token = getAccessToken();
+
+  const headers = new Headers(init.headers);
+  headers.set('accept', 'application/json');
+
+  if (token) {
+    headers.set('authorization', `Bearer ${token}`);
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(apiUrl(path), { ...init, headers });
+  } catch {
+    throw new ApiError(0, 'Nao conseguimos falar com o servico da Plataforma Hub.');
+  }
+
+  if (response.status === 401 && !retried) {
+    const renewed = await refreshAccessToken();
+
+    if (renewed) {
+      return request<T>(path, { ...options, retried: true });
+    }
+  }
 
   if (!response.ok) {
-    const error = await toApiError(response);
-
-    // Sessao encerrada em outra aba ou expirada de vez: volta para o login.
-    if (error.isUnauthorized && typeof window !== 'undefined') {
-      window.location.href = '/login';
-    }
-
-    throw error;
+    throw await toApiError(response);
   }
 
   if (response.status === 204) {

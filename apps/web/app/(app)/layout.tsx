@@ -1,17 +1,15 @@
-import { redirect } from 'next/navigation';
+'use client';
+
 import { AppShell } from '@/components/layout/app-shell';
-import { requireSession } from '@/lib/session';
+import { AuthGuard } from '@/components/session/auth-guard';
 
 /**
- * Layout da area logada. Resolve a sessao uma unica vez por navegacao e
- * garante que ninguem entre nos modulos antes de concluir o onboarding.
+ * Layout da area logada.
+ *
+ * Antes do static export a sessao era resolvida no servidor; agora o AuthGuard
+ * faz o mesmo papel no cliente e so libera o shell com sessao valida e
+ * onboarding concluido.
  */
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const session = await requireSession();
-
-  if (!session.organization.onboardingCompletedAt) {
-    redirect('/onboarding');
-  }
-
-  return <AppShell session={session}>{children}</AppShell>;
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return <AuthGuard>{(session) => <AppShell session={session}>{children}</AppShell>}</AuthGuard>;
 }

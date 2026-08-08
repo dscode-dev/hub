@@ -1,19 +1,30 @@
-import type { Metadata } from 'next';
-import { redirect } from 'next/navigation';
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { HubLogo } from '@/components/brand/logo';
-import { requireSession } from '@/lib/session';
+import { BootScreen } from '@/components/common/boot-screen';
+import { useSession } from '@/components/session/session-provider';
 import { OnboardingWizard } from './onboarding-wizard';
 
-export const metadata: Metadata = {
-  title: 'Primeiros passos',
-};
+export default function OnboardingPage() {
+  const router = useRouter();
+  const { phase, session } = useSession();
 
-export default async function OnboardingPage() {
-  const session = await requireSession();
+  useEffect(() => {
+    if (phase === 'anonymous') {
+      router.replace('/login');
+      return;
+    }
 
-  // Onboarding e etapa unica: quem ja passou nao volta para ela.
-  if (session.organization.onboardingCompletedAt) {
-    redirect('/dashboard');
+    // Onboarding e etapa unica: quem ja passou nao volta para ela.
+    if (session?.organization.onboardingCompletedAt) {
+      router.replace('/dashboard');
+    }
+  }, [phase, session, router]);
+
+  if (phase !== 'authenticated' || !session || session.organization.onboardingCompletedAt) {
+    return <BootScreen />;
   }
 
   return (

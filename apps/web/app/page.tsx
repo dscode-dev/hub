@@ -1,6 +1,33 @@
-import { redirect } from 'next/navigation';
+'use client';
 
-/** A raiz nao tem conteudo proprio: o middleware decide login ou dashboard. */
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+import { BootScreen } from '@/components/common/boot-screen';
+import { useSession } from '@/components/session/session-provider';
+
+/**
+ * Rota de entrada do renderer.
+ *
+ * E o `index.html` que o Electron carrega. O destino depende da sessao, que so
+ * e conhecida no cliente - por isso o redirecionamento acontece aqui e nao mais
+ * com `redirect()` de servidor, que o static export nao executa.
+ */
 export default function HomePage() {
-  redirect('/dashboard');
+  const router = useRouter();
+  const { phase, session } = useSession();
+
+  useEffect(() => {
+    if (phase === 'loading') {
+      return;
+    }
+
+    if (phase === 'anonymous' || !session) {
+      router.replace('/login');
+      return;
+    }
+
+    router.replace(session.organization.onboardingCompletedAt ? '/dashboard' : '/onboarding');
+  }, [phase, session, router]);
+
+  return <BootScreen />;
 }

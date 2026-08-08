@@ -92,6 +92,16 @@
     animation: hub-pulse 1.6s ease-in-out infinite;
   }
 
+  /* Barra indeterminada da tela de boot; espelha a splash nativa do Electron. */
+  @keyframes boot-slide {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(300%);
+    }
+  }
+
   @keyframes hub-pulse {
     0%,
     100% {

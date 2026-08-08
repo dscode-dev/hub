@@ -1,51 +1,79 @@
-import type { Metadata } from 'next';
-import { Suspense } from 'react';
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
 import type { Paginated, ProductDto } from '@hub/shared';
 import { ErrorState } from '@/components/common/error-state';
-import { serverFetch } from '@/lib/api/server';
-import { requireSession } from '@/lib/session';
+import { useSession } from '@/components/session/session-provider';
+import { Button } from '@/components/ui/button';
+import { apiClient } from '@/lib/api/client';
 import { ActivationPanel } from './activation-panel';
 import { DashboardOverview } from './dashboard-overview';
 import { DashboardSkeleton } from './dashboard-skeleton';
 import type { SetupStatus } from './types';
 
-export const metadata: Metadata = {
-  title: 'Visao geral',
-};
-
-export default async function DashboardPage() {
-  const session = await requireSession();
-  const firstName = session.user.name.split(' ')[0] ?? session.user.name;
-
-  return (
-    <Suspense fallback={<DashboardSkeleton greeting={firstName} />}>
-      <DashboardContent greeting={firstName} />
-    </Suspense>
-  );
+interface DashboardData {
+  setup: SetupStatus;
+  recentProducts: ProductDto[];
 }
 
-async function DashboardContent({ greeting }: { greeting: string }) {
-  let setup: SetupStatus;
-  let products: Paginated<ProductDto>;
+export default function DashboardPage() {
+  const { session } = useSession();
+  const firstName = session?.user.name.split(' ')[0] ?? '';
 
-  try {
-    [setup, products] = await Promise.all([
-      serverFetch<SetupStatus>('/organizations/me/setup-status'),
-      serverFetch<Paginated<ProductDto>>('/products?pageSize=5&sortBy=createdAt&sortOrder=desc'),
-    ]);
-  } catch {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  const load = useCallback(async () => {
+    setFailed(false);
+
+    try {
+      const [setup, products] = await Promise.all([
+        apiClient.get<SetupStatus>('/organizations/me/setup-status'),
+        apiClient.get<Paginated<ProductDto>>(
+          '/products?pageSize=5&sortBy=createdAt&sortOrder=desc',
+        ),
+      ]);
+
+      setData({ setup, recentProducts: products.data });
+    } catch {
+      setFailed(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  if (failed) {
     return (
-      <ErrorState description="Nao conseguimos carregar o resumo da sua operacao. Atualize a pagina para tentar de novo." />
+      <ErrorState
+        description="Nao conseguimos carregar o resumo da sua operacao."
+        action={
+          <Button type="button" onClick={() => void load()}>
+            Tentar novamente
+          </Button>
+        }
+      />
     );
+  }
+
+  if (!data) {
+    return <DashboardSkeleton greeting={firstName} />;
   }
 
   /*
    * Regra da tela: sem dados, nao mostramos cards com zero.
    * Um painel de ativacao vale mais do que um dashboard vazio.
    */
-  if (setup.productsCount === 0) {
-    return <ActivationPanel greeting={greeting} setup={setup} />;
+  if (data.setup.productsCount === 0) {
+    return <ActivationPanel greeting={firstName} setup={data.setup} />;
   }
 
-  return <DashboardOverview greeting={greeting} setup={setup} recentProducts={products.data} />;
+  return (
+    <DashboardOverview
+      greeting={firstName}
+      setup={data.setup}
+      recentProducts={data.recentProducts}
+    />
+  );
 }

@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { apiClient, ApiError } from '@/lib/api/client';
 import { parseCurrencyInput } from '@/lib/format';
+import { productDetailRoute } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 import { CategoryPicker } from './category-picker';
 
@@ -201,8 +202,7 @@ export function ProductForm({ mode, product }: ProductFormProps) {
 
       if (mode === 'edit') {
         toast.success('Produto atualizado.');
-        router.push(`/products/${saved.id}`);
-        router.refresh();
+        router.push(productDetailRoute(saved.id));
         return;
       }
 
@@ -210,7 +210,6 @@ export function ProductForm({ mode, product }: ProductFormProps) {
       setSavedProduct(saved);
       setForm(initialState());
       setSaving(false);
-      router.refresh();
     } catch (error) {
       if (error instanceof ApiError) {
         const mapped: Record<string, string> = {};
@@ -492,7 +491,7 @@ function SavedPanel({
         <Button
           type="button"
           variant="secondary"
-          onClick={() => router.push(`/products/${product.id}`)}
+          onClick={() => router.push(productDetailRoute(product.id))}
         >
           Ver produto
         </Button>

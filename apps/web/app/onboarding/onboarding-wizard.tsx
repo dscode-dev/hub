@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { apiClient, ApiError } from '@/lib/api/client';
+import { useSession } from '@/components/session/session-provider';
 import { cn } from '@/lib/utils';
 
 type Step = 1 | 2 | 3;
@@ -52,6 +53,7 @@ export function OnboardingWizard({
   defaultPhone: string;
 }) {
   const router = useRouter();
+  const { reload } = useSession();
 
   const [step, setStep] = useState<Step>(1);
   const [name, setName] = useState(defaultName);
@@ -96,8 +98,9 @@ export function OnboardingWizard({
         operationGoals: goals,
       });
 
+      // Atualiza a sessao antes de sair: o AuthGuard le onboardingCompletedAt.
+      await reload();
       router.replace(destination);
-      router.refresh();
     } catch (error) {
       setSubmitError(
         error instanceof ApiError

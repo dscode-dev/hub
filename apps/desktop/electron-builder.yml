@@ -1,0 +1,71 @@
+appId: com.plataformahub.desktop
+productName: Plataforma Hub
+copyright: Plataforma Hub
+
+directories:
+  output: release
+  buildResources: assets
+
+# Somente o runtime do Electron entra em app.asar. Backend e renderer sao
+# artefatos independentes e vao como extraResources, o que mantem os paths
+# resolvidos por `resolvePaths()` validos no app empacotado.
+files:
+  - dist/**/*
+  - package.json
+  - '!**/*.map'
+
+extraResources:
+  # Export estatico do Next -> resources/renderer
+  - from: ../web/out
+    to: renderer
+    filter:
+      - '**/*'
+  # Backend autocontido (dist + prisma + deps de producao), montado por
+  # scripts/stage-backend.mjs. Nao usamos apps/api direto porque o hoisting do
+  # npm workspaces deixa apps/api/node_modules praticamente vazio.
+  - from: build/backend
+    to: backend
+    filter:
+      - '**/*'
+  # Entrada propria para as dependencias: quando node_modules aparece no meio
+  # do caminho, o electron-builder o descarta. Declarado como raiz do `from`,
+  # o filtro passa a ser relativo a ele e o conteudo e copiado.
+  - from: build/backend/node_modules
+    to: backend/node_modules
+    filter:
+      - '**/*'
+  - from: assets
+    to: assets
+    filter:
+      - '**/*'
+
+asar: true
+
+mac:
+  category: public.app-category.business
+  icon: assets/icon.png
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  # Sem code signing nesta etapa: exige certificado da Apple Developer.
+  identity: null
+
+win:
+  icon: assets/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Plataforma Hub
+
+linux:
+  icon: assets/icon.png
+  category: Office
+  target:
+    - AppImage

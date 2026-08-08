@@ -5,6 +5,7 @@ import { EmptyState } from '@/components/common/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatCurrency, formatQuantity } from '@/lib/format';
+import { productDetailRoute } from '@/lib/routes';
 import { ProductsPagination } from './products-pagination';
 
 interface ProductsTableProps {
@@ -79,7 +80,7 @@ export function ProductsTable({ products, meta, search, showingInactive }: Produ
         {products.map((product) => (
           <li key={product.id}>
             <Link
-              href={`/products/${product.id}`}
+              href={productDetailRoute(product.id)}
               className="flex items-center gap-3 rounded-xl border border-line bg-surface p-4 transition-colors active:bg-surface-muted"
             >
               <span className="min-w-0 flex-1">
@@ -142,7 +143,7 @@ export function ProductsTable({ products, meta, search, showingInactive }: Produ
               <tr key={product.id} className="group transition-colors hover:bg-surface-muted">
                 <td className="max-w-[320px] px-5 py-3">
                   <Link
-                    href={`/products/${product.id}`}
+                    href={productDetailRoute(product.id)}
                     className="flex items-center gap-2 font-medium text-foreground"
                   >
                     <span className="truncate">{product.name}</span>
@@ -172,7 +173,7 @@ export function ProductsTable({ products, meta, search, showingInactive }: Produ
 
                 <td className="px-5 py-3">
                   <Link
-                    href={`/products/${product.id}`}
+                    href={productDetailRoute(product.id)}
                     aria-label={`Abrir ${product.name}`}
                     className="flex justify-end text-foreground-subtle transition-colors group-hover:text-brand-600"
                   >

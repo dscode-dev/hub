@@ -14,3 +14,11 @@ coverage/
 .DS_Store
 *.log
 npm-debug.log*
+
+# Artefatos do desktop
+apps/desktop/dist/
+apps/desktop/release/
+apps/desktop/build/
+
+# Export estatico do renderer
+apps/web/out/

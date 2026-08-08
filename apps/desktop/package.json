@@ -1,0 +1,35 @@
+{
+  "name": "@hub/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Plataforma Hub - aplicacao desktop (Electron)",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build:main": "esbuild src/main/main.ts --bundle --platform=node --target=node20 --format=cjs --external:electron --outfile=dist/main/main.js",
+    "build:preload": "esbuild src/preload/preload.ts --bundle --platform=node --target=node20 --format=cjs --external:electron --outfile=dist/preload/preload.js",
+    "copy:windows": "node scripts/copy-static.mjs",
+    "build": "npm run typecheck && npm run build:main && npm run build:preload && npm run copy:windows",
+    "dev:build": "npm run build:main -- --sourcemap && npm run build:preload -- --sourcemap && npm run copy:windows",
+    "dev": "node scripts/dev.mjs",
+    "start": "electron .",
+    "lint": "eslint \"{src,scripts}/**/*.{ts,mjs}\"",
+    "package": "npm run build && npm run stage:backend && electron-builder --config electron-builder.yml",
+    "package:dir": "npm run build && npm run stage:backend && electron-builder --config electron-builder.yml --dir",
+    "stage:backend": "node scripts/stage-backend.mjs"
+  },
+  "dependencies": {
+    "@hub/shared": "*"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.20.0",
+    "@types/node": "^22.13.0",
+    "electron": "33.4.11",
+    "electron-builder": "^26.0.12",
+    "esbuild": "^0.25.0",
+    "eslint": "^9.20.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.24.0"
+  },
+  "author": "Plataforma Hub"
+}

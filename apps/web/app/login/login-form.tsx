@@ -1,20 +1,18 @@
 'use client';
 
-import type { Route } from 'next';
-import { useRouter } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { useSession } from '@/components/session/session-provider';
 import { internalRoute } from '@/lib/routes';
 
-interface LoginResult {
-  redirectTo: string | null;
-}
-
-export function LoginForm({ redirectTo }: { redirectTo: Route }) {
+export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { phase, session, login } = useSession();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,33 +20,33 @@ export function LoginForm({ redirectTo }: { redirectTo: Route }) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Sessao restaurada (ex.: reabriu o app): nao mostramos o login de novo.
+  useEffect(() => {
+    if (phase !== 'authenticated' || !session) {
+      return;
+    }
+
+    router.replace(
+      session.organization.onboardingCompletedAt
+        ? internalRoute(searchParams.get('next'), '/dashboard')
+        : '/onboarding',
+    );
+  }, [phase, session, router, searchParams]);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
     setSubmitting(true);
 
-    try {
-      const response = await fetch('/api/bff/auth/login', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
+    const result = await login({ email, password });
 
-      const body = (await response.json()) as LoginResult & { message?: string };
-
-      if (!response.ok) {
-        setError(body.message ?? 'Nao foi possivel entrar. Tente novamente.');
-        setSubmitting(false);
-        return;
-      }
-
-      // Quem ainda nao concluiu o onboarding vai para ele, nao para o destino salvo.
-      router.replace(internalRoute(body.redirectTo, redirectTo));
-      router.refresh();
-    } catch {
-      setError('Sem conexao com o servidor. Verifique sua internet e tente de novo.');
+    if (!result.ok) {
+      setError(result.message ?? 'Nao foi possivel entrar. Tente novamente.');
       setSubmitting(false);
+      return;
     }
+
+    // O efeito acima cuida do destino assim que a sessao entra no contexto.
   };
 
   return (

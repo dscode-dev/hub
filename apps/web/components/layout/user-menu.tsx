@@ -12,19 +12,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useSession } from '@/components/session/session-provider';
 import { initials } from '@/lib/format';
 
 export function UserMenu({ user }: { user: AuthUserDto }) {
   const router = useRouter();
+  const { logout } = useSession();
   const [signingOut, setSigningOut] = useState(false);
 
   const handleSignOut = async () => {
     setSigningOut(true);
 
     try {
-      await fetch('/api/bff/auth/logout', { method: 'POST' });
+      // Revoga no backend e limpa o refresh token guardado no processo principal.
+      await logout();
       router.replace('/login');
-      router.refresh();
     } finally {
       setSigningOut(false);
     }
