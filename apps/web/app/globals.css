@@ -1,0 +1,104 @@
+@import 'tailwindcss';
+
+/*
+ * Identidade visual da Plataforma Hub.
+ *
+ * Base branca, azul da marca reservado para acao primaria, selecao, links e
+ * indicadores. Neutros muito leves para superficies secundarias. Sem gradientes
+ * decorativos, sem sombras pesadas, sem tema escuro (decisao consciente: o
+ * produto e uma ferramenta de trabalho diurno, com muito conteudo em tabela).
+ */
+@theme {
+  /* Azul da logomarca */
+  --color-brand-50: #eff5ff;
+  --color-brand-100: #dbe8fe;
+  --color-brand-200: #bfd7fe;
+  --color-brand-300: #93bcfd;
+  --color-brand-400: #6098fa;
+  --color-brand-500: #3b78f6;
+  --color-brand-600: #1665f0;
+  --color-brand-700: #0f4fc7;
+  --color-brand-800: #123fa0;
+  /* Azul escuro do lettering "Plataforma" */
+  --color-brand-900: #0b2e75;
+  --color-brand-950: #071e4f;
+
+  /* Superficies */
+  --color-surface: #ffffff;
+  --color-surface-muted: #f6f8fc;
+  --color-surface-subtle: #fbfcfe;
+
+  /* Texto */
+  --color-foreground: #0f172a;
+  --color-foreground-muted: #526078;
+  --color-foreground-subtle: #7c8799;
+
+  /* Traços e estados */
+  --color-line: #e5eaf2;
+  --color-line-strong: #d3dbe8;
+  --color-success: #067a53;
+  --color-success-surface: #e7f6ef;
+  --color-warning: #9a5b06;
+  --color-warning-surface: #fdf3e3;
+  --color-danger: #c0322b;
+  --color-danger-surface: #fdeceb;
+
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
+
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-surface);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Foco visivel e consistente: acessibilidade nao e opcional. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-600);
+    outline-offset: 2px;
+  }
+
+  /* Numeros tabulares em listagens e valores monetarios */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  /* Realce discreto usado em cards de ativacao e estados vazios. */
+  .surface-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-xl);
+  }
+
+  .skeleton {
+    background-color: var(--color-surface-muted);
+    animation: hub-pulse 1.6s ease-in-out infinite;
+  }
+
+  @keyframes hub-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.55;
+    }
+  }
+}

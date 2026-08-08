@@ -1,0 +1,32 @@
+{
+  "name": "plataforma-hub",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Plataforma Hub - SaaS de gestao operacional para pequenos e medios negocios",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "dev": "npm run dev --workspace=@hub/api & npm run dev --workspace=@hub/web",
+    "dev:api": "npm run dev --workspace=@hub/api",
+    "dev:web": "npm run dev --workspace=@hub/web",
+    "build": "npm run build --workspace=@hub/shared && npm run build --workspace=@hub/api && npm run build --workspace=@hub/web",
+    "lint": "npm run lint --workspace=@hub/api && npm run lint --workspace=@hub/web",
+    "test": "npm run test --workspace=@hub/api",
+    "db:migrate": "npm run db:migrate --workspace=@hub/api",
+    "db:seed": "npm run db:seed --workspace=@hub/api"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "allowScripts": {
+    "prisma@6.19.3": true,
+    "@prisma/client@6.19.3": true,
+    "@prisma/engines@6.19.3": true,
+    "unrs-resolver@1.12.2": true,
+    "sharp@0.34.5": true
+  }
+}

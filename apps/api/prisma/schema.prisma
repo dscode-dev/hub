@@ -1,0 +1,219 @@
+// Plataforma Hub - schema inicial.
+//
+// Regras adotadas em todo o schema:
+//  * Toda entidade operacional carrega organizationId (isolamento multi-tenant).
+//  * Unicidade de dados de negocio e sempre por tenant (organizationId + campo),
+//    nunca global. Ex.: dois clientes diferentes podem usar o mesmo SKU.
+//  * Valores monetarios usam Decimal(14,2); quantidades usam Decimal(14,3)
+//    para suportar itens fracionados (kg, metro) sem mudar o core.
+//  * Nada e apagado fisicamente no dominio operacional: usamos active=false.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MANAGER
+  SELLER
+  FINANCE
+  STOCK
+  DELIVERY
+  VIEWER
+}
+
+enum OperationGoal {
+  SELL_PRODUCTS
+  MANAGE_INVENTORY
+  MANAGE_FINANCE
+  INSTALLMENT_PAYMENTS
+  MANAGE_DELIVERIES
+}
+
+enum ImportJobStatus {
+  DRAFT
+  COMPLETED
+  FAILED
+}
+
+/// Empresa cliente da plataforma. Raiz de todo isolamento de dados.
+model Organization {
+  id        String  @id @default(uuid()) @db.Uuid
+  name      String  @db.VarChar(160)
+  tradeName String? @db.VarChar(160)
+  document  String? @db.VarChar(32)
+  email     String? @db.VarChar(180)
+  phone     String? @db.VarChar(32)
+
+  /// Coletado no onboarding; usado para personalizar a experiencia.
+  operationGoals        OperationGoal[]
+  onboardingCompletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users      User[]
+  categories Category[]
+  products   Product[]
+  auditLogs  AuditLog[]
+  importJobs ImportJob[]
+
+  @@index([document])
+  @@map("organizations")
+}
+
+model User {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+
+  name         String   @db.VarChar(160)
+  /// Global unico: o login e feito apenas com e-mail + senha, sem seletor de tenant.
+  email        String   @unique @db.VarChar(180)
+  passwordHash String
+  role         UserRole @default(VIEWER)
+  active       Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
+  importJobs    ImportJob[]
+
+  @@index([organizationId, active])
+  @@map("users")
+}
+
+/// Refresh tokens sao persistidos com hash para permitir rotacao e logout real.
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  /// SHA-256 do token; o valor puro so existe no cookie HttpOnly do cliente.
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model Category {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+
+  name        String  @db.VarChar(120)
+  description String? @db.VarChar(500)
+  active      Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  products     Product[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, active])
+  @@map("categories")
+}
+
+/// Produto generico: serve para movel, eletronico, material de construcao etc.
+/// Atributos especificos de nicho devem entrar depois via tabela de atributos,
+/// nunca como colunas dedicadas aqui.
+model Product {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  categoryId     String? @db.Uuid
+
+  name        String  @db.VarChar(200)
+  sku         String? @db.VarChar(64)
+  barcode     String? @db.VarChar(64)
+  description String? @db.VarChar(2000)
+
+  costPrice Decimal? @db.Decimal(14, 2)
+  salePrice Decimal  @db.Decimal(14, 2)
+
+  active         Boolean @default(true)
+  trackInventory Boolean @default(false)
+
+  /// Saldo simples de estoque. Sera substituido por movimentacoes quando o
+  /// modulo de Estoque existir; ate la evita um cadastro incompleto.
+  stockQuantity    Decimal  @default(0) @db.Decimal(14, 3)
+  minStockQuantity Decimal? @db.Decimal(14, 3)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category     Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  // SKU e codigo de barras sao unicos por tenant, nunca globalmente.
+  @@unique([organizationId, sku])
+  @@unique([organizationId, barcode])
+  @@index([organizationId, active])
+  @@index([organizationId, categoryId])
+  @@index([organizationId, name])
+  @@map("products")
+}
+
+/// Trilha de auditoria minima. Sem event sourcing neste momento.
+model AuditLog {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  userId         String? @db.Uuid
+
+  action   String  @db.VarChar(64)
+  entity   String  @db.VarChar(64)
+  entityId String? @db.VarChar(64)
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, entity, entityId])
+  @@map("audit_logs")
+}
+
+/// Importacao de CSV: o arquivo enviado fica guardado ate a confirmacao,
+/// permitindo mapear colunas e revisar o preview sem reenviar o arquivo.
+model ImportJob {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  userId         String? @db.Uuid
+
+  filename String          @db.VarChar(255)
+  status   ImportJobStatus @default(DRAFT)
+
+  /// Conteudo bruto do CSV. Suficiente para arquivos de PME; volumes maiores
+  /// devem migrar para object storage + processamento assincrono.
+  rawContent  String
+  columns     Json
+  fieldMapping Json?
+
+  totalRows   Int   @default(0)
+  createdRows Int   @default(0)
+  failedRows  Int   @default(0)
+  errors      Json?
+
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@map("import_jobs")
+}
