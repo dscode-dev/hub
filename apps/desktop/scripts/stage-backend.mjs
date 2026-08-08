@@ -31,7 +31,17 @@ rmSync(stageDir, { recursive: true, force: true });
 mkdirSync(stageDir, { recursive: true });
 
 cpSync(join(apiRoot, 'dist'), join(stageDir, 'dist'), { recursive: true });
-cpSync(join(apiRoot, 'prisma'), join(stageDir, 'prisma'), { recursive: true });
+/*
+ * Schema e migrations vao para o pacote; arquivos de banco NAO.
+ *
+ * O `dev.db` do workspace contem a organizacao e os produtos de demonstracao,
+ * alem do usuario `owner@plataformahub.local`. Nada disso pode viajar para a
+ * maquina de um cliente - e o banco real nasce vazio em userData.
+ */
+cpSync(join(apiRoot, 'prisma'), join(stageDir, 'prisma'), {
+  recursive: true,
+  filter: (source) => !/\.db(-wal|-shm)?$/.test(source),
+});
 
 /*
  * `@hub/shared` e workspace: no pacote final ele nao existe como registro npm,

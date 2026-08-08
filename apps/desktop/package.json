@@ -1,5 +1,6 @@
 {
   "name": "@hub/desktop",
+  "productName": "Plataforma Hub",
   "version": "0.1.0",
   "private": true,
   "description": "Plataforma Hub - aplicacao desktop (Electron)",

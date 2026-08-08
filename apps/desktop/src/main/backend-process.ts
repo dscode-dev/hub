@@ -14,6 +14,7 @@ import {
   resolvePaths,
 } from '../shared/config';
 import { createLogger } from '../shared/logger';
+import { buildDatabaseUrl, getDatabasePath } from './app-paths';
 
 const log = createLogger('backend');
 
@@ -76,9 +77,18 @@ async function bootBackend(): Promise<BackendStatus> {
     throw new BackendStartError(message);
   }
 
+  /*
+   * O Renderer nunca sabe onde o banco fica, e o backend nao decide sozinho:
+   * quem resolve o caminho e o Main Process, que conhece o diretorio de dados
+   * do usuario. A URL vai pelo ambiente do processo filho.
+   */
+  const databasePath = getDatabasePath();
+  const databaseUrl = buildDatabaseUrl(databasePath);
+
   stopping = false;
   status = { phase: 'starting', baseUrl: BACKEND_API_BASE, detail: null };
-  log.info('Iniciando backend', { entry, port: BACKEND_PORT });
+  // Loga o diretorio, nunca a URL completa: ela carrega o nome do usuario.
+  log.info('Iniciando backend', { entry, port: BACKEND_PORT, database: 'userData/data/hub.db' });
 
   /*
    * spawn com o binario Node embutido no Electron (ELECTRON_RUN_AS_NODE) em vez
@@ -97,6 +107,7 @@ async function bootBackend(): Promise<BackendStatus> {
       HUB_DESKTOP: '1',
       // Permite ao backend se encerrar se o Electron morrer a forca.
       HUB_PARENT_PID: String(process.pid),
+      DATABASE_URL: databaseUrl,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
     // Grupo de processos proprio: permite matar a arvore inteira no POSIX.
