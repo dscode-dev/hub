@@ -80,6 +80,44 @@
 }
 
 @layer utilities {
+  /*
+   * Fundo das telas de entrada (login).
+   *
+   * Tres camadas sobre base branca: um halo da marca no topo, um segundo mais
+   * frio na base e a transicao para o neutro claro. A identidade continua
+   * branca - o azul entra como luz, nao como preenchimento.
+   */
+  .auth-backdrop {
+    background-image:
+      radial-gradient(50rem 26rem at 50% -8%, var(--color-brand-200), transparent 66%),
+      radial-gradient(32rem 22rem at 8% 104%, var(--color-brand-100), transparent 62%),
+      radial-gradient(40rem 26rem at 94% 100%, var(--color-brand-100), transparent 62%),
+      linear-gradient(180deg, var(--color-surface) 28%, var(--color-surface-muted) 100%);
+  }
+
+  /*
+   * Malha quadriculada. A mascara mantem a textura viva no miolo e a dissolve
+   * nas bordas, para a tela ter profundidade sem virar papel milimetrado.
+   */
+  .auth-grid {
+    background-image:
+      linear-gradient(to right, var(--color-brand-200) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--color-brand-200) 1px, transparent 1px);
+    background-size: 48px 48px;
+    -webkit-mask-image: radial-gradient(ellipse 82% 68% at 50% 44%, #000 42%, transparent 100%);
+    mask-image: radial-gradient(ellipse 82% 68% at 50% 44%, #000 42%, transparent 100%);
+  }
+
+  /*
+   * Sombra em duas camadas: um contorno curto que define a borda e uma queda
+   * longa e difusa que da altura. Le melhor sobre a malha do que um blur unico.
+   */
+  .auth-card {
+    box-shadow:
+      0 1px 2px rgba(11, 46, 117, 0.05),
+      0 16px 40px -12px rgba(11, 46, 117, 0.18);
+  }
+
   /* Realce discreto usado em cards de ativacao e estados vazios. */
   .surface-card {
     background-color: var(--color-surface);
