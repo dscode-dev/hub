@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { OrganizationDto } from '@hub/shared';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { serializeStringList } from '@/common/utils/string-list';
 import type { AuthenticatedUser } from '@/common/types/authenticated-user';
 import { AuditService } from '@/modules/audit/audit.service';
 import type { CompleteOnboardingDto } from './dto/complete-onboarding.dto';
@@ -43,7 +44,7 @@ export class OrganizationsService {
         document: dto.document,
         email: dto.email,
         phone: dto.phone,
-        operationGoals: dto.operationGoals,
+        operationGoals: dto.operationGoals ? serializeStringList(dto.operationGoals) : undefined,
       },
     });
 
@@ -69,7 +70,7 @@ export class OrganizationsService {
         name: dto.name,
         tradeName: dto.tradeName ?? null,
         phone: dto.phone ?? null,
-        operationGoals: dto.operationGoals ?? [],
+        operationGoals: serializeStringList(dto.operationGoals),
         onboardingCompletedAt: new Date(),
       },
     });

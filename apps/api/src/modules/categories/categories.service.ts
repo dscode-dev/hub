@@ -31,7 +31,7 @@ export class CategoriesService {
       organizationId,
       active: query.active ?? true,
       ...(query.search
-        ? { name: { contains: query.search, mode: Prisma.QueryMode.insensitive } }
+        ? { name: { contains: query.search } }
         : {}),
     };
 
@@ -109,13 +109,7 @@ export class CategoriesService {
   async findOrCreateByName(organizationId: string, name: string): Promise<string> {
     const trimmed = name.trim();
 
-    const existing = await this.prisma.category.findFirst({
-      where: {
-        organizationId,
-        name: { equals: trimmed, mode: Prisma.QueryMode.insensitive },
-      },
-      select: { id: true },
-    });
+    const existing = await this.findByNameInsensitive(organizationId, trimmed);
 
     if (existing) {
       return existing.id;
@@ -127,6 +121,29 @@ export class CategoriesService {
     });
 
     return created.id;
+  }
+
+  /**
+   * Busca por nome ignorando caixa.
+   *
+   * O SQLite compara `=` de forma sensivel a caixa, entao `equals` sozinho
+   * deixaria passar "Sofas" e "sofas" como categorias distintas. LIKE (via
+   * `contains`) ignora caixa para ASCII: usamos ele para reduzir os candidatos
+   * e confirmamos a igualdade exata em JS, o que tambem cobre acentuacao.
+   */
+  private async findByNameInsensitive(organizationId: string, name: string, ignoreId?: string) {
+    const target = name.trim().toLowerCase();
+
+    const candidates = await this.prisma.category.findMany({
+      where: {
+        organizationId,
+        name: { contains: name.trim() },
+        ...(ignoreId ? { NOT: { id: ignoreId } } : {}),
+      },
+      select: { id: true, name: true },
+    });
+
+    return candidates.find((candidate) => candidate.name.trim().toLowerCase() === target) ?? null;
   }
 
   /** Toda leitura por id passa por aqui: id + organizationId, nunca so o id. */
@@ -144,14 +161,7 @@ export class CategoriesService {
   }
 
   private async assertNameIsFree(organizationId: string, name: string, ignoreId?: string) {
-    const duplicate = await this.prisma.category.findFirst({
-      where: {
-        organizationId,
-        name: { equals: name, mode: Prisma.QueryMode.insensitive },
-        ...(ignoreId ? { NOT: { id: ignoreId } } : {}),
-      },
-      select: { id: true },
-    });
+    const duplicate = await this.findByNameInsensitive(organizationId, name, ignoreId);
 
     if (duplicate) {
       throw new ConflictException('Ja existe uma categoria com esse nome');

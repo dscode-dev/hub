@@ -1,19 +1,30 @@
-// Plataforma Hub - schema inicial.
+// Plataforma Hub - schema local (SQLite).
+//
+// A instalacao desktop e local-first: o banco vive no diretorio de dados do
+// usuario e o NestJS e o unico processo que o acessa.
 //
 // Regras adotadas em todo o schema:
 //  * Toda entidade operacional carrega organizationId (isolamento multi-tenant).
-//  * Unicidade de dados de negocio e sempre por tenant (organizationId + campo),
-//    nunca global. Ex.: dois clientes diferentes podem usar o mesmo SKU.
-//  * Valores monetarios usam Decimal(14,2); quantidades usam Decimal(14,3)
-//    para suportar itens fracionados (kg, metro) sem mudar o core.
+//    Mantido mesmo no desktop: e o que torna sincronizacao e import/export
+//    viaveis no futuro sem remodelar nada.
+//  * Identificadores sao UUID gerados pela aplicacao, nunca autoincremento.
+//    IDs globalmente unicos evitam colisao numa futura sincronizacao.
+//  * Unicidade de dados de negocio e por tenant, nunca global.
 //  * Nada e apagado fisicamente no dominio operacional: usamos active=false.
+//
+// Adaptacoes exigidas pelo SQLite (ver README):
+//  * Valores monetarios e quantidades sao INTEIROS. SQLite nao tem tipo decimal
+//    real - DECIMAL cai em afinidade NUMERIC e vira ponto flutuante, que
+//    acumula erro em somas. Dinheiro em centavos elimina isso por construcao.
+//  * Listas escalares nao existem: campos multivalorados sao JSON em texto.
+//  * Atributos nativos (@db.Uuid, @db.VarChar) nao se aplicam.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -28,31 +39,71 @@ enum UserRole {
   VIEWER
 }
 
-enum OperationGoal {
-  SELL_PRODUCTS
-  MANAGE_INVENTORY
-  MANAGE_FINANCE
-  INSTALLMENT_PAYMENTS
-  MANAGE_DELIVERIES
-}
-
 enum ImportJobStatus {
   DRAFT
   COMPLETED
   FAILED
 }
 
-/// Empresa cliente da plataforma. Raiz de todo isolamento de dados.
-model Organization {
-  id        String  @id @default(uuid()) @db.Uuid
-  name      String  @db.VarChar(160)
-  tradeName String? @db.VarChar(160)
-  document  String? @db.VarChar(32)
-  email     String? @db.VarChar(180)
-  phone     String? @db.VarChar(32)
+/// Marca que o primeiro acesso desta instalacao ja foi concluido.
+///
+/// Existe como tabela (e nao como flag em memoria ou arquivo externo) porque a
+/// garantia precisa vir do banco: `id` tem valor fixo, entao duas requisicoes
+/// simultaneas de setup disputam a MESMA chave primaria e apenas uma insere.
+model InstanceSetup {
+  /// Sempre "singleton". A chave fixa e o proprio mecanismo de exclusao.
+  id             String   @id
+  organizationId String
+  userId         String
+  completedAt    DateTime @default(now())
 
-  /// Coletado no onboarding; usado para personalizar a experiencia.
-  operationGoals        OperationGoal[]
+  @@map("instance_setup")
+}
+
+/// Configuracao da instalacao, em pares chave/valor.
+///
+/// Guarda o que pertence ao dominio da instalacao e precisa sobreviver a
+/// reinstalacao do aplicativo (ex.: `installation.initialized`). Deliberadamente
+/// simples: nao e um sistema de configuracao, e um lugar honesto para meia duzia
+/// de chaves que nao merecem tabela propria.
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
+}
+
+/// Empresa cliente. Raiz de todo isolamento de dados.
+model Organization {
+  id        String  @id @default(uuid())
+  name      String
+  tradeName String?
+  document  String?
+  email     String?
+  phone     String?
+
+  /// Endereco em colunas explicitas (e nao JSON) porque sera impresso em
+  /// documentos e recibos, e precisa ser consultavel campo a campo.
+  addressZipCode    String?
+  addressStreet     String?
+  addressNumber     String?
+  addressComplement String?
+  addressDistrict   String?
+  addressCity       String?
+  addressState      String?
+  /// Ponto de referencia: so o cliente sabe informar, nunca vem do CEP.
+  addressReference  String?
+
+  /// Logo em data URL. Guardar no banco mantem a instalacao autocontida -
+  /// sem caminho de arquivo que quebra ao mover ou reinstalar o aplicativo.
+  logo String?
+
+  /// Listas em JSON: SQLite nao suporta lista escalar. A conversao acontece
+  /// no mapper, entao o dominio continua enxergando arrays tipados.
+  segments       String @default("[]")
+  operationGoals String @default("[]")
+
   onboardingCompletedAt DateTime?
 
   createdAt DateTime @default(now())
@@ -69,12 +120,12 @@ model Organization {
 }
 
 model User {
-  id             String @id @default(uuid()) @db.Uuid
-  organizationId String @db.Uuid
+  id             String @id @default(uuid())
+  organizationId String
 
-  name         String   @db.VarChar(160)
+  name         String
   /// Global unico: o login e feito apenas com e-mail + senha, sem seletor de tenant.
-  email        String   @unique @db.VarChar(180)
+  email        String   @unique
   passwordHash String
   role         UserRole @default(VIEWER)
   active       Boolean  @default(true)
@@ -93,9 +144,9 @@ model User {
 
 /// Refresh tokens sao persistidos com hash para permitir rotacao e logout real.
 model RefreshToken {
-  id        String    @id @default(uuid()) @db.Uuid
-  userId    String    @db.Uuid
-  /// SHA-256 do token; o valor puro so existe no cookie HttpOnly do cliente.
+  id        String    @id @default(uuid())
+  userId    String
+  /// SHA-256 do token; o valor puro so existe no cofre do processo principal.
   tokenHash String    @unique
   expiresAt DateTime
   revokedAt DateTime?
@@ -109,11 +160,11 @@ model RefreshToken {
 }
 
 model Category {
-  id             String @id @default(uuid()) @db.Uuid
-  organizationId String @db.Uuid
+  id             String @id @default(uuid())
+  organizationId String
 
-  name        String  @db.VarChar(120)
-  description String? @db.VarChar(500)
+  name        String
+  description String?
   active      Boolean @default(true)
 
   createdAt DateTime @default(now())
@@ -131,25 +182,26 @@ model Category {
 /// Atributos especificos de nicho devem entrar depois via tabela de atributos,
 /// nunca como colunas dedicadas aqui.
 model Product {
-  id             String  @id @default(uuid()) @db.Uuid
-  organizationId String  @db.Uuid
-  categoryId     String? @db.Uuid
+  id             String  @id @default(uuid())
+  organizationId String
+  categoryId     String?
 
-  name        String  @db.VarChar(200)
-  sku         String? @db.VarChar(64)
-  barcode     String? @db.VarChar(64)
-  description String? @db.VarChar(2000)
+  name        String
+  sku         String?
+  barcode     String?
+  description String?
 
-  costPrice Decimal? @db.Decimal(14, 2)
-  salePrice Decimal  @db.Decimal(14, 2)
+  /// Dinheiro em CENTAVOS (inteiro). Ver nota no topo do arquivo.
+  costPriceCents Int?
+  salePriceCents Int
 
   active         Boolean @default(true)
   trackInventory Boolean @default(false)
 
-  /// Saldo simples de estoque. Sera substituido por movimentacoes quando o
-  /// modulo de Estoque existir; ate la evita um cadastro incompleto.
-  stockQuantity    Decimal  @default(0) @db.Decimal(14, 3)
-  minStockQuantity Decimal? @db.Decimal(14, 3)
+  /// Quantidades em MILESIMOS (inteiro), permitindo itens fracionados
+  /// (kg, metro) sem recorrer a ponto flutuante.
+  stockQuantityMilli    Int  @default(0)
+  minStockQuantityMilli Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -168,13 +220,13 @@ model Product {
 
 /// Trilha de auditoria minima. Sem event sourcing neste momento.
 model AuditLog {
-  id             String  @id @default(uuid()) @db.Uuid
-  organizationId String  @db.Uuid
-  userId         String? @db.Uuid
+  id             String  @id @default(uuid())
+  organizationId String
+  userId         String?
 
-  action   String  @db.VarChar(64)
-  entity   String  @db.VarChar(64)
-  entityId String? @db.VarChar(64)
+  action   String
+  entity   String
+  entityId String?
   metadata Json?
 
   createdAt DateTime @default(now())
@@ -190,17 +242,17 @@ model AuditLog {
 /// Importacao de CSV: o arquivo enviado fica guardado ate a confirmacao,
 /// permitindo mapear colunas e revisar o preview sem reenviar o arquivo.
 model ImportJob {
-  id             String  @id @default(uuid()) @db.Uuid
-  organizationId String  @db.Uuid
-  userId         String? @db.Uuid
+  id             String  @id @default(uuid())
+  organizationId String
+  userId         String?
 
-  filename String          @db.VarChar(255)
+  filename String
   status   ImportJobStatus @default(DRAFT)
 
   /// Conteudo bruto do CSV. Suficiente para arquivos de PME; volumes maiores
-  /// devem migrar para object storage + processamento assincrono.
-  rawContent  String
-  columns     Json
+  /// devem migrar para armazenamento em disco + processamento assincrono.
+  rawContent   String
+  columns      Json
   fieldMapping Json?
 
   totalRows   Int   @default(0)

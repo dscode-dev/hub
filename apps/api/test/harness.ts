@@ -3,9 +3,9 @@ import { Test } from '@nestjs/testing';
 import { hash } from 'bcryptjs';
 import type { UserRole } from '@hub/shared';
 import { AppModule } from '@/app.module';
-import { buildValidationPipe } from '@/common/pipes/validation.pipe';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { API_PREFIX } from '@/common/constants';
+import { configureApp } from '@/configure-app';
 
 export interface TestContext {
   app: INestApplication;
@@ -17,18 +17,36 @@ export async function createTestApp(): Promise<TestContext> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
 
   const app = moduleRef.createNestApplication();
-  app.setGlobalPrefix(API_PREFIX);
-  app.useGlobalPipes(buildValidationPipe());
+  // Mesma configuracao do bootstrap real: prefixo, pipes e limites de corpo.
+  configureApp(app);
   await app.init();
 
   return { app, prisma: app.get(PrismaService) };
 }
 
-/** Limpa o banco entre testes respeitando a ordem das FKs. */
+/**
+ * Limpa o banco entre testes.
+ *
+ * SQLite nao tem TRUNCATE: usamos DELETE na ordem inversa das dependencias,
+ * com as chaves estrangeiras ativas - assim um erro de ordem apareceria aqui
+ * em vez de mascarar um problema de modelagem.
+ */
+const TABLES_IN_DELETE_ORDER = [
+  'import_jobs',
+  'audit_logs',
+  'products',
+  'categories',
+  'refresh_tokens',
+  'users',
+  'organizations',
+  'instance_setup',
+  'app_settings',
+];
+
 export async function resetDatabase(prisma: PrismaService): Promise<void> {
-  await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "import_jobs", "audit_logs", "products", "categories", "refresh_tokens", "users", "organizations" RESTART IDENTITY CASCADE',
-  );
+  for (const table of TABLES_IN_DELETE_ORDER) {
+    await prisma.$executeRawUnsafe(`DELETE FROM "${table}"`);
+  }
 }
 
 export interface SeededTenant {

@@ -9,12 +9,15 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { PrismaModule } from './common/prisma/prisma.module';
+import { AddressModule } from './modules/address/address.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { HealthController } from './health.controller';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { ProductsModule } from './modules/products/products.module';
+import { SetupModule } from './modules/setup/setup.module';
+import { SystemModule } from './modules/system/system.module';
 
 @Module({
   imports: [
@@ -31,11 +34,14 @@ import { ProductsModule } from './modules/products/products.module';
     }),
     JwtModule.register({}),
     PrismaModule,
+    AddressModule,
     AuditModule,
     AuthModule,
     OrganizationsModule,
     CategoriesModule,
     ProductsModule,
+    SetupModule,
+    SystemModule,
   ],
   controllers: [HealthController],
   providers: [

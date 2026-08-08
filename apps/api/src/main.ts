@@ -6,17 +6,24 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { API_PREFIX } from './common/constants';
 import { startParentWatchdog } from './common/parent-watchdog';
-import { buildValidationPipe } from './common/pipes/validation.pipe';
+import { configureApp } from './configure-app';
+import { prepareDatabase } from './database/database-bootstrap';
 
 async function bootstrap(): Promise<void> {
   // Rede de seguranca caso o Electron seja morto a forca.
   startParentWatchdog();
 
+  /*
+   * Diretorio, banco e migrations antes de qualquer coisa. Se falhar, o
+   * processo morre e o Electron mostra a tela de erro - jamais atendemos
+   * requisicoes com o schema desatualizado.
+   */
+  await prepareDatabase();
+
   const app = await NestFactory.create(AppModule, { bufferLogs: false });
   const configService = app.get(ConfigService);
 
-  app.setGlobalPrefix(API_PREFIX);
-  app.useGlobalPipes(buildValidationPipe());
+  configureApp(app);
 
   /*
    * CORS do runtime desktop.

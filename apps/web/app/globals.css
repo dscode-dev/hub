@@ -89,23 +89,26 @@
    */
   .auth-backdrop {
     background-image:
-      radial-gradient(50rem 26rem at 50% -8%, var(--color-brand-200), transparent 66%),
-      radial-gradient(32rem 22rem at 8% 104%, var(--color-brand-100), transparent 62%),
-      radial-gradient(40rem 26rem at 94% 100%, var(--color-brand-100), transparent 62%),
-      linear-gradient(180deg, var(--color-surface) 28%, var(--color-surface-muted) 100%);
+      radial-gradient(96rem 56rem at 50% -24%, var(--color-brand-200), transparent 72%),
+      radial-gradient(72rem 46rem at -8% 104%, var(--color-brand-100), transparent 70%),
+      radial-gradient(80rem 50rem at 106% 96%, var(--color-brand-100), transparent 70%),
+      linear-gradient(180deg, var(--color-surface) 18%, var(--color-surface-muted) 100%);
   }
 
   /*
-   * Malha quadriculada. A mascara mantem a textura viva no miolo e a dissolve
-   * nas bordas, para a tela ter profundidade sem virar papel milimetrado.
+   * Malha quadriculada.
+   *
+   * Presente como textura, nao como assunto: celulas largas, traco muito claro
+   * e mascara ampla, que dissolve a grade num degrade longo em vez de cortar.
    */
   .auth-grid {
     background-image:
       linear-gradient(to right, var(--color-brand-200) 1px, transparent 1px),
       linear-gradient(to bottom, var(--color-brand-200) 1px, transparent 1px);
-    background-size: 48px 48px;
-    -webkit-mask-image: radial-gradient(ellipse 82% 68% at 50% 44%, #000 42%, transparent 100%);
-    mask-image: radial-gradient(ellipse 82% 68% at 50% 44%, #000 42%, transparent 100%);
+    background-size: 56px 56px;
+    opacity: 0.34;
+    -webkit-mask-image: radial-gradient(ellipse 92% 82% at 50% 42%, #000 12%, transparent 100%);
+    mask-image: radial-gradient(ellipse 92% 82% at 50% 42%, #000 12%, transparent 100%);
   }
 
   /*
@@ -128,6 +131,27 @@
   .skeleton {
     background-color: var(--color-surface-muted);
     animation: hub-pulse 1.6s ease-in-out infinite;
+  }
+
+  /*
+   * Confirmacao de campo preenchido corretamente.
+   *
+   * Entra com um leve overshoot e para. Feedback imediato de acerto reduz a
+   * sensacao de formulario longo - a pessoa ve o progresso enquanto digita.
+   */
+  @keyframes check-pop {
+    0% {
+      opacity: 0;
+      transform: scale(0.6);
+    }
+    60% {
+      opacity: 1;
+      transform: scale(1.12);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
 
   /* Barra indeterminada da tela de boot; espelha a splash nativa do Electron. */

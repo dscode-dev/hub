@@ -3,12 +3,20 @@ import { Prisma } from '@prisma/client';
 import type { Paginated, ProductDto } from '@hub/shared';
 import { paginate } from '@/common/dto/pagination-query.dto';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { toCents, toCentsOrNull, toMilli, toMilliOrNull } from '@/common/utils/money';
 import type { AuthenticatedUser } from '@/common/types/authenticated-user';
 import { AuditService } from '@/modules/audit/audit.service';
 import type { CreateProductDto } from './dto/create-product.dto';
-import type { ListProductsQueryDto } from './dto/list-products-query.dto';
+import type { ListProductsQueryDto, ProductSortField } from './dto/list-products-query.dto';
 import type { UpdateProductDto } from './dto/update-product.dto';
 import { productInclude, toProductDto } from './product.mapper';
+
+/** Campo publico de ordenacao -> coluna real (preco vive em centavos). */
+const SORT_COLUMNS: Record<ProductSortField, 'name' | 'salePriceCents' | 'createdAt'> = {
+  name: 'name',
+  salePrice: 'salePriceCents',
+  createdAt: 'createdAt',
+};
 
 @Injectable()
 export class ProductsService {
@@ -24,7 +32,7 @@ export class ProductsService {
       this.prisma.product.findMany({
         where,
         include: productInclude,
-        orderBy: { [query.sortBy]: query.sortOrder },
+        orderBy: { [SORT_COLUMNS[query.sortBy]]: query.sortOrder },
         skip: query.skip,
         take: query.pageSize,
       }),
@@ -59,20 +67,18 @@ export class ProductsService {
       data: {
         organizationId,
         name: dto.name,
-        salePrice: new Prisma.Decimal(dto.salePrice),
+        salePriceCents: toCents(dto.salePrice),
         sku: dto.sku ?? null,
         barcode: dto.barcode ?? null,
         description: dto.description ?? null,
         categoryId: dto.categoryId ?? null,
-        costPrice: dto.costPrice === undefined || dto.costPrice === null ? null : new Prisma.Decimal(dto.costPrice),
+        costPriceCents: toCentsOrNull(dto.costPrice),
         active: dto.active ?? true,
         trackInventory,
         // Quantidades so fazem sentido com controle de estoque ligado.
-        stockQuantity: new Prisma.Decimal(trackInventory ? (dto.stockQuantity ?? 0) : 0),
-        minStockQuantity:
-          trackInventory && dto.minStockQuantity !== undefined && dto.minStockQuantity !== null
-            ? new Prisma.Decimal(dto.minStockQuantity)
-            : null,
+        stockQuantityMilli: toMilli(trackInventory ? (dto.stockQuantity ?? 0) : 0),
+        minStockQuantityMilli:
+          trackInventory ? toMilliOrNull(dto.minStockQuantity) : null,
       },
       include: productInclude,
     });
@@ -102,21 +108,16 @@ export class ProductsService {
       where: { id },
       data: {
         name: dto.name,
-        salePrice: dto.salePrice === undefined ? undefined : new Prisma.Decimal(dto.salePrice),
+        salePriceCents: dto.salePrice === undefined ? undefined : toCents(dto.salePrice),
         sku: dto.sku,
         barcode: dto.barcode,
         description: dto.description,
         categoryId: dto.categoryId,
-        costPrice:
-          dto.costPrice === undefined
-            ? undefined
-            : dto.costPrice === null
-              ? null
-              : new Prisma.Decimal(dto.costPrice),
+        costPriceCents: dto.costPrice === undefined ? undefined : toCentsOrNull(dto.costPrice),
         active: dto.active,
         trackInventory: dto.trackInventory,
-        stockQuantity: this.resolveStockUpdate(trackInventory, dto.stockQuantity),
-        minStockQuantity: this.resolveMinStockUpdate(trackInventory, dto.minStockQuantity),
+        stockQuantityMilli: this.resolveStockUpdate(trackInventory, dto.stockQuantity),
+        minStockQuantityMilli: this.resolveMinStockUpdate(trackInventory, dto.minStockQuantity),
       },
       include: productInclude,
     });
@@ -169,21 +170,24 @@ export class ProductsService {
       ...(search
         ? {
             OR: [
-              { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
-              { sku: { contains: search, mode: Prisma.QueryMode.insensitive } },
-              { barcode: { contains: search, mode: Prisma.QueryMode.insensitive } },
+              // SQLite: LIKE ja ignora caixa para ASCII, e o conector nao
+              // aceita `mode`. Acentos continuam sensiveis a caixa.
+              { name: { contains: search } },
+              { sku: { contains: search } },
+              { barcode: { contains: search } },
             ],
           }
         : {}),
     };
   }
 
+  /** Desligar o controle de estoque zera o saldo; ligado, so muda se enviado. */
   private resolveStockUpdate(trackInventory: boolean, value: number | undefined) {
     if (!trackInventory) {
-      return new Prisma.Decimal(0);
+      return 0;
     }
 
-    return value === undefined ? undefined : new Prisma.Decimal(value);
+    return value === undefined ? undefined : toMilli(value);
   }
 
   private resolveMinStockUpdate(trackInventory: boolean, value: number | null | undefined) {
@@ -191,11 +195,7 @@ export class ProductsService {
       return null;
     }
 
-    if (value === undefined) {
-      return undefined;
-    }
-
-    return value === null ? null : new Prisma.Decimal(value);
+    return value === undefined ? undefined : toMilliOrNull(value);
   }
 
   /** Sempre id + organizationId: e o que impede IDOR entre tenants. */

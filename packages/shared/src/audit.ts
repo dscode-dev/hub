@@ -11,10 +11,18 @@ export const AUDIT_ACTIONS = [
   'PRODUCT_IMPORTED',
   'ORGANIZATION_UPDATED',
   'ONBOARDING_COMPLETED',
+  'INSTANCE_SETUP_COMPLETED',
+  'DATABASE_BACKUP_CREATED',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
-export const AUDIT_ENTITIES = ['User', 'Product', 'Organization', 'ImportJob'] as const;
+export const AUDIT_ENTITIES = [
+  'User',
+  'Product',
+  'Organization',
+  'ImportJob',
+  'Database',
+] as const;
 
 export type AuditEntity = (typeof AUDIT_ENTITIES)[number];

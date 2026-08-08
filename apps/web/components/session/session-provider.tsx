@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import type { SessionDto } from '@hub/shared';
+import type { SessionDto, SetupStatusDto } from '@hub/shared';
 import { apiClient } from '@/lib/api/client';
 import {
   clearAccessToken,
@@ -25,6 +25,11 @@ export type SessionPhase = 'loading' | 'authenticated' | 'anonymous';
 interface SessionContextValue {
   phase: SessionPhase;
   session: SessionDto | null;
+  /**
+   * true enquanto a instalacao nao tiver um usuario responsavel.
+   * `null` enquanto a consulta nao respondeu.
+   */
+  setupRequired: boolean | null;
   login(credentials: { email: string; password: string }): Promise<{ ok: boolean; message?: string }>;
   logout(): Promise<void>;
   /** Recarrega usuario e organizacao (ex.: apos concluir o onboarding). */
@@ -36,6 +41,7 @@ const SessionContext = createContext<SessionContextValue | null>(null);
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [phase, setPhase] = useState<SessionPhase>('loading');
   const [session, setSession] = useState<SessionDto | null>(null);
+  const [setupRequired, setSetupRequired] = useState<boolean | null>(null);
 
   const loadSession = useCallback(async (): Promise<boolean> => {
     try {
@@ -57,6 +63,31 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
 
     const restore = async () => {
+      /*
+       * Antes de qualquer coisa: esta instalacao ja tem dono? Sem isso a tela
+       * de login apareceria numa maquina onde ainda nao existe nenhum usuario.
+       */
+      try {
+        const status = await apiClient.get<SetupStatusDto>('/setup/status');
+
+        if (cancelled) {
+          return;
+        }
+
+        setSetupRequired(status.required);
+
+        if (status.required) {
+          setPhase('anonymous');
+          return;
+        }
+      } catch {
+        // Backend indisponivel: seguimos para o fluxo normal, que mostrara o
+        // erro de conexao em vez de travar o boot numa tela vazia.
+        if (!cancelled) {
+          setSetupRequired(false);
+        }
+      }
+
       const driver = getSessionDriver();
 
       if (!(await driver.hasStoredSession())) {
@@ -106,6 +137,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       }
 
       setAccessToken(result.accessToken);
+      // Houve login: por construcao a instalacao tem dono.
+      setSetupRequired(false);
       const loaded = await loadSession();
 
       return loaded
@@ -123,8 +156,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<SessionContextValue>(
-    () => ({ phase, session, login, logout, reload: () => loadSession().then(() => undefined) }),
-    [phase, session, login, logout, loadSession],
+    () => ({
+      phase,
+      session,
+      setupRequired,
+      login,
+      logout,
+      reload: () => loadSession().then(() => undefined),
+    }),
+    [phase, session, setupRequired, login, logout, loadSession],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

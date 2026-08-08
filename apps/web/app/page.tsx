@@ -14,10 +14,16 @@ import { useSession } from '@/components/session/session-provider';
  */
 export default function HomePage() {
   const router = useRouter();
-  const { phase, session } = useSession();
+  const { phase, session, setupRequired } = useSession();
 
   useEffect(() => {
     if (phase === 'loading') {
+      return;
+    }
+
+    // Instalacao nova: nao ha o que autenticar antes de existir um dono.
+    if (setupRequired) {
+      router.replace('/setup');
       return;
     }
 
@@ -27,7 +33,7 @@ export default function HomePage() {
     }
 
     router.replace(session.organization.onboardingCompletedAt ? '/dashboard' : '/onboarding');
-  }, [phase, session, router]);
+  }, [phase, session, setupRequired, router]);
 
   return <BootScreen />;
 }

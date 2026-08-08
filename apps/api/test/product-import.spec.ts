@@ -113,11 +113,12 @@ describe('Importacao de produtos por CSV', () => {
       'Poltrona',
     ]);
 
-    // "R$ 459,90" e "1.250,00" precisam virar numeros corretos.
+    // "R$ 459,90" e "1.250,00" precisam virar centavos exatos - inteiros,
+    // sem passar por ponto flutuante em nenhum momento do armazenamento.
     const cadeira = products.find((product) => product.sku === 'CAD-01');
-    expect(Number(cadeira?.salePrice)).toBe(459.9);
+    expect(cadeira?.salePriceCents).toBe(45990);
     const mesa = products.find((product) => product.sku === 'MES-01');
-    expect(Number(mesa?.salePrice)).toBe(1250);
+    expect(mesa?.salePriceCents).toBe(125000);
   });
 
   it('cria as categorias do arquivo sem duplicar', async () => {

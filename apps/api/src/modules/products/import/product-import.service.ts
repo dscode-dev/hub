@@ -12,6 +12,7 @@ import type {
 import { PrismaService } from '@/common/prisma/prisma.service';
 import type { AuthenticatedUser } from '@/common/types/authenticated-user';
 import { parseHumanNumber } from '@/common/utils/decimal';
+import { toCents, toMilli } from '@/common/utils/money';
 import { AuditService } from '@/modules/audit/audit.service';
 import { CategoriesService } from '@/modules/categories/categories.service';
 import { decodeCsvBuffer, normalizeHeader, parseCsv } from './csv.util';
@@ -156,11 +157,11 @@ export class ProductImportService {
           data: {
             organizationId,
             name: evaluated.name,
-            salePrice: new Prisma.Decimal(evaluated.salePrice),
+            salePriceCents: toCents(evaluated.salePrice),
             sku,
             categoryId,
             trackInventory,
-            stockQuantity: new Prisma.Decimal(evaluated.stockQuantity ?? 0),
+            stockQuantityMilli: toMilli(evaluated.stockQuantity ?? 0),
           },
         });
 

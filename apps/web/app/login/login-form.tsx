@@ -12,7 +12,7 @@ import { internalRoute } from '@/lib/routes';
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { phase, session, login } = useSession();
+  const { phase, session, setupRequired, login } = useSession();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,6 +22,11 @@ export function LoginForm() {
 
   // Sessao restaurada (ex.: reabriu o app): nao mostramos o login de novo.
   useEffect(() => {
+    if (setupRequired) {
+      router.replace('/setup');
+      return;
+    }
+
     if (phase !== 'authenticated' || !session) {
       return;
     }
@@ -31,7 +36,7 @@ export function LoginForm() {
         ? internalRoute(searchParams.get('next'), '/dashboard')
         : '/onboarding',
     );
-  }, [phase, session, router, searchParams]);
+  }, [phase, session, setupRequired, router, searchParams]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

@@ -1,5 +1,6 @@
 import type { OperationGoal } from './operation-goals';
 import type { UserRole } from './roles';
+import type { BusinessSegment } from './setup';
 
 /** Envelope padrao de listagens paginadas da API. */
 export interface Paginated<T> {
@@ -12,6 +13,17 @@ export interface Paginated<T> {
   };
 }
 
+export interface OrganizationAddressDto {
+  zipCode: string | null;
+  street: string | null;
+  number: string | null;
+  complement: string | null;
+  district: string | null;
+  city: string | null;
+  state: string | null;
+  reference: string | null;
+}
+
 export interface OrganizationDto {
   id: string;
   name: string;
@@ -19,6 +31,10 @@ export interface OrganizationDto {
   document: string | null;
   email: string | null;
   phone: string | null;
+  /** Logo em data URL, guardada na propria instalacao. */
+  logo: string | null;
+  segments: BusinessSegment[];
+  address: OrganizationAddressDto;
   operationGoals: OperationGoal[];
   onboardingCompletedAt: string | null;
   createdAt: string;

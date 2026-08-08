@@ -11,6 +11,7 @@ import type { Request, Response } from 'express';
 
 /** A partir daqui o erro e nosso, nao do cliente: vira log de erro. */
 const SERVER_ERROR_THRESHOLD = 500;
+const PAYLOAD_TOO_LARGE = 413;
 
 interface ErrorBody {
   statusCode: number;
@@ -75,6 +76,25 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return { ...this.mapPrismaError(exception), path, timestamp };
     }
 
+    /*
+     * Middlewares do Express (body-parser, multer) lancam erros com status
+     * proprio que nao sao HttpException. Sem este ramo, um corpo grande demais
+     * virava "erro interno" e escondia a causa real de quem chamou.
+     */
+    const middlewareStatus = this.extractMiddlewareStatus(exception);
+
+    if (middlewareStatus) {
+      return {
+        statusCode: middlewareStatus,
+        message:
+          middlewareStatus === PAYLOAD_TOO_LARGE
+            ? 'O conteudo enviado e grande demais.'
+            : 'Requisicao invalida.',
+        path,
+        timestamp,
+      };
+    }
+
     return {
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
       message: 'Erro interno do servidor',
@@ -105,6 +125,22 @@ export class AllExceptionsFilter implements ExceptionFilter {
           message: 'Erro ao acessar o banco de dados',
         };
     }
+  }
+
+  /** Extrai o status de erros de middleware, aceitando apenas 4xx. */
+  private extractMiddlewareStatus(exception: unknown): number | null {
+    if (typeof exception !== 'object' || exception === null) {
+      return null;
+    }
+
+    const { status, statusCode } = exception as { status?: unknown; statusCode?: unknown };
+    const value = typeof status === 'number' ? status : statusCode;
+
+    if (typeof value !== 'number' || value < 400 || value >= SERVER_ERROR_THRESHOLD) {
+      return null;
+    }
+
+    return value;
   }
 
   private isFieldErrors(value: unknown): value is Record<string, string[]> {
