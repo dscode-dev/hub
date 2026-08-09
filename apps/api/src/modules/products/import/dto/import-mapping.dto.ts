@@ -48,6 +48,18 @@ export class ImportFieldMappingDto {
   @IsString()
   @MaxLength(200)
   barcode?: string | null;
+
+  @ApiPropertyOptional({ description: 'Coluna com o codigo da unidade (UN, KG...)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  unitCode?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  minimumStock?: string | null;
 }
 
 export class ApplyImportMappingDto {

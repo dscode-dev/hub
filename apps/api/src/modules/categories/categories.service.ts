@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import type { CategoryDto, Paginated } from '@hub/shared';
 import { paginate } from '@/common/dto/pagination-query.dto';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { normalizeSearchText } from '@/common/utils/normalize';
 import type { CreateCategoryDto } from './dto/create-category.dto';
 import type { ListCategoriesQueryDto } from './dto/list-categories-query.dto';
 import type { UpdateCategoryDto } from './dto/update-category.dto';
@@ -31,7 +32,7 @@ export class CategoriesService {
       organizationId,
       active: query.active ?? true,
       ...(query.search
-        ? { name: { contains: query.search } }
+        ? { nameNormalized: { contains: normalizeSearchText(query.search) } }
         : {}),
     };
 
@@ -56,6 +57,7 @@ export class CategoriesService {
       data: {
         organizationId,
         name: dto.name,
+        nameNormalized: normalizeSearchText(dto.name),
         description: dto.description ?? null,
         active: dto.active ?? true,
       },
@@ -80,6 +82,7 @@ export class CategoriesService {
       where: { id },
       data: {
         name: dto.name,
+        nameNormalized: dto.name === undefined ? undefined : normalizeSearchText(dto.name),
         description: dto.description,
         active: dto.active,
       },
@@ -116,7 +119,7 @@ export class CategoriesService {
     }
 
     const created = await this.prisma.category.create({
-      data: { organizationId, name: trimmed },
+      data: { organizationId, name: trimmed, nameNormalized: normalizeSearchText(trimmed) },
       select: { id: true },
     });
 
@@ -124,26 +127,21 @@ export class CategoriesService {
   }
 
   /**
-   * Busca por nome ignorando caixa.
+   * Busca por nome ignorando caixa E acento.
    *
-   * O SQLite compara `=` de forma sensivel a caixa, entao `equals` sozinho
-   * deixaria passar "Sofas" e "sofas" como categorias distintas. LIKE (via
-   * `contains`) ignora caixa para ASCII: usamos ele para reduzir os candidatos
-   * e confirmamos a igualdade exata em JS, o que tambem cobre acentuacao.
+   * A coluna normalizada resolve o que o SQLite nao resolve sozinho:
+   * "Eletronicos", "eletrônicos" e "ELETRÔNICOS" colidem no mesmo valor,
+   * entao a comparacao volta a ser uma igualdade simples e indexada.
    */
   private async findByNameInsensitive(organizationId: string, name: string, ignoreId?: string) {
-    const target = name.trim().toLowerCase();
-
-    const candidates = await this.prisma.category.findMany({
+    return this.prisma.category.findFirst({
       where: {
         organizationId,
-        name: { contains: name.trim() },
+        nameNormalized: normalizeSearchText(name),
         ...(ignoreId ? { NOT: { id: ignoreId } } : {}),
       },
       select: { id: true, name: true },
     });
-
-    return candidates.find((candidate) => candidate.name.trim().toLowerCase() === target) ?? null;
   }
 
   /** Toda leitura por id passa por aqui: id + organizationId, nunca so o id. */

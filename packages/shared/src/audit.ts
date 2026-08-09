@@ -13,6 +13,9 @@ export const AUDIT_ACTIONS = [
   'ONBOARDING_COMPLETED',
   'INSTANCE_SETUP_COMPLETED',
   'DATABASE_BACKUP_CREATED',
+  'INVENTORY_MOVEMENT_CREATED',
+  'INVENTORY_COUNT_CREATED',
+  'INVENTORY_COUNT_COMPLETED',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -23,6 +26,7 @@ export const AUDIT_ENTITIES = [
   'Organization',
   'ImportJob',
   'Database',
+  'InventoryCount',
 ] as const;
 
 export type AuditEntity = (typeof AUDIT_ENTITIES)[number];

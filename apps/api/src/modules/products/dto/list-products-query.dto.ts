@@ -2,6 +2,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsBoolean, IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { PaginationQueryDto } from '@/common/dto/pagination-query.dto';
+import { STOCK_STATUSES, type StockStatus } from '@hub/shared';
 import { toBooleanFromQuery, trimString } from '@/common/utils/transforms';
 
 export const PRODUCT_SORT_FIELDS = ['name', 'salePrice', 'createdAt'] as const;
@@ -25,6 +26,11 @@ export class ListProductsQueryDto extends PaginationQueryDto {
   @Transform(toBooleanFromQuery)
   @IsBoolean()
   active?: boolean;
+
+  @ApiPropertyOptional({ enum: STOCK_STATUSES, description: 'Filtra pelo status derivado' })
+  @IsOptional()
+  @IsIn(STOCK_STATUSES, { message: 'Status de estoque invalido' })
+  stockStatus?: StockStatus;
 
   @ApiPropertyOptional({ enum: PRODUCT_SORT_FIELDS, default: 'createdAt' })
   @IsOptional()

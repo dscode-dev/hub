@@ -89,22 +89,25 @@ describe('Produtos', () => {
     });
 
     it('grava estoque apenas quando o controle esta ligado', async () => {
+      // Sem controle de estoque, a quantidade informada e ignorada.
       const withoutTracking = await createProduct(tokenA, {
         name: 'Servico',
         salePrice: 100,
-        stockQuantity: 30,
+        initialQuantity: 30,
       }).expect(201);
-      expect(withoutTracking.body.stockQuantity).toBe(0);
+      expect(withoutTracking.body.inventory.quantity).toBe(0);
+      expect(withoutTracking.body.inventory.status).toBe('NOT_TRACKED');
 
       const withTracking = await createProduct(tokenA, {
         name: 'Cadeira',
         salePrice: 100,
         trackInventory: true,
-        stockQuantity: 30,
-        minStockQuantity: 5,
+        initialQuantity: 30,
+        minimumStock: 5,
       }).expect(201);
-      expect(withTracking.body.stockQuantity).toBe(30);
-      expect(withTracking.body.minStockQuantity).toBe(5);
+      expect(withTracking.body.inventory.quantity).toBe(30);
+      expect(withTracking.body.inventory.minimum).toBe(5);
+      expect(withTracking.body.inventory.status).toBe('IN_STOCK');
     });
 
     it('registra a criacao na auditoria', async () => {
@@ -168,7 +171,11 @@ describe('Produtos', () => {
 
     it('recusa vincular categoria de outra organizacao', async () => {
       const categoryB = await prisma.category.create({
-        data: { organizationId: tenantB.organizationId, name: 'Categoria da Beta' },
+        data: {
+          organizationId: tenantB.organizationId,
+          name: 'Categoria da Beta',
+          nameNormalized: 'categoria da beta',
+        },
       });
 
       await createProduct(tokenA, {
@@ -198,13 +205,13 @@ describe('Produtos', () => {
       expect(updated.body.sku).toBe('MESA-1');
     });
 
-    it('zera o estoque ao desligar o controle de inventario', async () => {
+    it('deixa de reportar estoque ao desligar o controle', async () => {
       const created = await createProduct(tokenA, {
         name: 'Cadeira',
         salePrice: 100,
         trackInventory: true,
-        stockQuantity: 12,
-        minStockQuantity: 3,
+        initialQuantity: 12,
+        minimumStock: 3,
       }).expect(201);
 
       const updated = await request(app.getHttpServer())
@@ -213,8 +220,17 @@ describe('Produtos', () => {
         .send({ trackInventory: false })
         .expect(200);
 
-      expect(updated.body.stockQuantity).toBe(0);
-      expect(updated.body.minStockQuantity).toBeNull();
+      expect(updated.body.inventory.status).toBe('NOT_TRACKED');
+      expect(updated.body.inventory.minimum).toBeNull();
+
+      /*
+       * O ledger NAO e apagado: o historico continua explicando o que houve.
+       * Religar o controle deve devolver o saldo, e nao comecar do zero.
+       */
+      const movements = await prisma.inventoryMovement.count({
+        where: { productId: created.body.id },
+      });
+      expect(movements).toBe(1);
     });
 
     it('registra a alteracao na auditoria', async () => {

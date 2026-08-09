@@ -4,16 +4,17 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { BackendStatus } from '@hub/shared';
 import {
-  BACKEND_API_BASE,
-  BACKEND_HEALTH_URL,
+  backendApiBase,
+  backendHealthUrl,
   BACKEND_HOST,
   BACKEND_POLL_INTERVAL_MS,
-  BACKEND_PORT,
+  getBackendPort,
   BACKEND_READY_TIMEOUT_MS,
   BACKEND_SHUTDOWN_GRACE_MS,
   resolvePaths,
 } from '../shared/config';
 import { createLogger } from '../shared/logger';
+import { resolveBackendSecret } from './backend-secret';
 import { buildDatabaseUrl, getDatabasePath } from './app-paths';
 
 const log = createLogger('backend');
@@ -26,7 +27,7 @@ const log = createLogger('backend');
  */
 
 let child: ChildProcess | null = null;
-let status: BackendStatus = { phase: 'stopped', baseUrl: BACKEND_API_BASE, detail: null };
+let status: BackendStatus = { phase: 'stopped', baseUrl: backendApiBase(), detail: null };
 /** Evita que o handler de exit dispare a UI de erro durante o encerramento normal. */
 let stopping = false;
 let startPromise: Promise<BackendStatus> | null = null;
@@ -73,7 +74,7 @@ async function bootBackend(): Promise<BackendStatus> {
   if (!existsSync(entry)) {
     const message = `Build do backend nao encontrado em ${entry}`;
     log.error(message);
-    status = { phase: 'failed', baseUrl: BACKEND_API_BASE, detail: message };
+    status = { phase: 'failed', baseUrl: backendApiBase(), detail: message };
     throw new BackendStartError(message);
   }
 
@@ -86,9 +87,9 @@ async function bootBackend(): Promise<BackendStatus> {
   const databaseUrl = buildDatabaseUrl(databasePath);
 
   stopping = false;
-  status = { phase: 'starting', baseUrl: BACKEND_API_BASE, detail: null };
+  status = { phase: 'starting', baseUrl: backendApiBase(), detail: null };
   // Loga o diretorio, nunca a URL completa: ela carrega o nome do usuario.
-  log.info('Iniciando backend', { entry, port: BACKEND_PORT, database: 'userData/data/hub.db' });
+  log.info('Iniciando backend', { entry, port: getBackendPort(), database: 'userData/data/hub.db' });
 
   /*
    * spawn com o binario Node embutido no Electron (ELECTRON_RUN_AS_NODE) em vez
@@ -101,13 +102,17 @@ async function bootBackend(): Promise<BackendStatus> {
       ...process.env,
       ELECTRON_RUN_AS_NODE: '1',
       NODE_ENV: process.env.NODE_ENV ?? 'production',
-      PORT: String(BACKEND_PORT),
+      PORT: String(getBackendPort()),
       HOST: BACKEND_HOST,
       // O renderer roda em hub://app; o backend precisa aceitar essa origem.
       HUB_DESKTOP: '1',
       // Permite ao backend se encerrar se o Electron morrer a forca.
       HUB_PARENT_PID: String(process.pid),
       DATABASE_URL: databaseUrl,
+      // Gerado por instalacao no primeiro boot; nunca embutido no pacote.
+      JWT_ACCESS_SECRET: resolveBackendSecret(),
+      // O app instalado nao expoe a documentacao: ela so serve em dev.
+      SWAGGER_ENABLED: process.env.SWAGGER_ENABLED ?? 'false',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
     // Grupo de processos proprio: permite matar a arvore inteira no POSIX.
@@ -134,13 +139,13 @@ async function bootBackend(): Promise<BackendStatus> {
     startPromise = null;
 
     if (wasStopping) {
-      status = { phase: 'stopped', baseUrl: BACKEND_API_BASE, detail: null };
+      status = { phase: 'stopped', baseUrl: backendApiBase(), detail: null };
       log.info('Backend encerrado');
       return;
     }
 
     const detail = `Backend encerrou inesperadamente (code=${code ?? 'null'}, signal=${signal ?? 'null'})`;
-    status = { phase: 'failed', baseUrl: BACKEND_API_BASE, detail };
+    status = { phase: 'failed', baseUrl: backendApiBase(), detail };
     log.error(detail);
     unexpectedExitHandler?.(detail);
   });
@@ -151,8 +156,8 @@ async function bootBackend(): Promise<BackendStatus> {
 
   await waitForHealth();
 
-  status = { phase: 'ready', baseUrl: BACKEND_API_BASE, detail: null };
-  log.info('Backend pronto', { url: BACKEND_API_BASE });
+  status = { phase: 'ready', baseUrl: backendApiBase(), detail: null };
+  log.info('Backend pronto', { url: backendApiBase() });
 
   return status;
 }
@@ -185,7 +190,7 @@ async function pingHealth(): Promise<boolean> {
   const timeout = setTimeout(() => controller.abort(), 2_000);
 
   try {
-    const response = await fetch(BACKEND_HEALTH_URL, { signal: controller.signal });
+    const response = await fetch(backendHealthUrl(), { signal: controller.signal });
 
     if (!response.ok) {
       return false;
@@ -210,7 +215,7 @@ export async function stopBackend(): Promise<void> {
   if (!current || current.killed) {
     child = null;
     startPromise = null;
-    status = { phase: 'stopped', baseUrl: BACKEND_API_BASE, detail: null };
+    status = { phase: 'stopped', baseUrl: backendApiBase(), detail: null };
     return;
   }
 
@@ -255,7 +260,7 @@ export async function stopBackend(): Promise<void> {
   }
 
   child = null;
-  status = { phase: 'stopped', baseUrl: BACKEND_API_BASE, detail: null };
+  status = { phase: 'stopped', baseUrl: backendApiBase(), detail: null };
 }
 
 /** No Windows, matar apenas o pid deixa netos orfaos; /T cobre a arvore. */

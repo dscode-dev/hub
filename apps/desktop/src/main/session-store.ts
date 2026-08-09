@@ -2,7 +2,7 @@ import { app, safeStorage } from 'electron';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DesktopSessionResult } from '@hub/shared';
-import { BACKEND_API_BASE } from '../shared/config';
+import { backendApiBase } from '../shared/config';
 import { createLogger } from '../shared/logger';
 
 const log = createLogger('session');
@@ -90,7 +90,7 @@ async function callBackend(
   body: unknown,
 ): Promise<{ ok: true; data: BackendSessionResponse } | { ok: false; message: string }> {
   try {
-    const response = await fetch(`${BACKEND_API_BASE}${path}`, {
+    const response = await fetch(`${backendApiBase()}${path}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),

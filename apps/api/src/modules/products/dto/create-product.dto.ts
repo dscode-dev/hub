@@ -21,22 +21,25 @@ import {
 /**
  * Cadastro rapido: apenas `name` e `salePrice` sao obrigatorios.
  * Todo o resto pode ser completado depois, sem bloquear o usuario.
+ *
+ * Quantidades chegam em unidades humanas (10, 1.5) e viram milesimos no
+ * service. O cliente nunca precisa saber que existe `milli`.
  */
 export class CreateProductDto {
-  @ApiProperty({ example: 'Sofa 3 lugares' })
+  @ApiProperty({ example: 'Cafe Premium 500g' })
   @Transform(trimString)
   @IsString()
   @MinLength(2, { message: 'O nome do produto deve ter ao menos 2 caracteres' })
   @MaxLength(200)
   name!: string;
 
-  @ApiProperty({ example: 1299.9, minimum: 0 })
+  @ApiProperty({ example: 29.9, minimum: 0 })
   @Transform(toOptionalNumber)
   @IsNumber({ maxDecimalPlaces: 2 }, { message: 'Informe um preco de venda valido' })
   @Min(0, { message: 'O preco de venda nao pode ser negativo' })
   salePrice!: number;
 
-  @ApiPropertyOptional({ example: 'SOF-001' })
+  @ApiPropertyOptional({ example: 'CAF001' })
   @IsOptional()
   @Transform(trimToNull)
   @ValidateIf((_object, value) => value !== null)
@@ -44,11 +47,13 @@ export class CreateProductDto {
   @MaxLength(64)
   sku?: string | null;
 
-  @ApiPropertyOptional({ example: '7891234567890' })
+  @ApiPropertyOptional({ example: '7891234567890', description: 'EAN, UPC, Code128 ou interno' })
   @IsOptional()
   @Transform(trimToNull)
   @ValidateIf((_object, value) => value !== null)
   @IsString()
+  // Amplo de proposito: nao restringimos a EAN-13.
+  @MinLength(4, { message: 'Codigo de barras muito curto' })
   @MaxLength(64)
   barcode?: string | null;
 
@@ -67,7 +72,14 @@ export class CreateProductDto {
   @IsUUID('4', { message: 'Categoria invalida' })
   categoryId?: string | null;
 
-  @ApiPropertyOptional({ example: 780.5, minimum: 0 })
+  @ApiPropertyOptional({ format: 'uuid', description: 'Unidade de medida' })
+  @IsOptional()
+  @Transform(trimToNull)
+  @ValidateIf((_object, value) => value !== null)
+  @IsUUID('4', { message: 'Unidade de medida invalida' })
+  unitId?: string | null;
+
+  @ApiPropertyOptional({ example: 18.5, minimum: 0 })
   @IsOptional()
   @Transform(toNullableNumber)
   @ValidateIf((_object, value) => value !== null)
@@ -80,20 +92,24 @@ export class CreateProductDto {
   @IsBoolean()
   trackInventory?: boolean;
 
-  @ApiPropertyOptional({ example: 10, minimum: 0, description: 'Estoque inicial' })
+  /**
+   * Estoque inicial. NAO e persistido como campo: vira um movimento
+   * INITIAL_STOCK no ledger, que passa a ser a explicacao do saldo.
+   */
+  @ApiPropertyOptional({ example: 10, minimum: 0, description: 'Vira movimento INITIAL_STOCK' })
   @IsOptional()
   @Transform(toOptionalNumber)
   @IsNumber({ maxDecimalPlaces: 3 }, { message: 'Informe uma quantidade valida' })
   @Min(0, { message: 'A quantidade nao pode ser negativa' })
-  stockQuantity?: number;
+  initialQuantity?: number;
 
-  @ApiPropertyOptional({ example: 2, minimum: 0, description: 'Estoque minimo para alerta' })
+  @ApiPropertyOptional({ example: 5, minimum: 0, description: 'Nivel de alerta' })
   @IsOptional()
   @Transform(toNullableNumber)
   @ValidateIf((_object, value) => value !== null)
   @IsNumber({ maxDecimalPlaces: 3 }, { message: 'Informe um estoque minimo valido' })
   @Min(0, { message: 'O estoque minimo nao pode ser negativo' })
-  minStockQuantity?: number | null;
+  minimumStock?: number | null;
 
   @ApiPropertyOptional({ default: true })
   @IsOptional()

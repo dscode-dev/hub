@@ -5,7 +5,26 @@ import { PrismaService } from '@/common/prisma/prisma.service';
 import { runMigrations } from '@/database/migration-runner';
 import { resolveDatabaseFile } from '@/database/database-paths';
 import { createTestApp, resetDatabase, seedTenant } from './harness';
+
 import { TEST_DATA_DIR, buildTestDatabaseUrl } from './test-database';
+
+/**
+ * Produto minimo para testes de integridade no nivel do banco.
+ * `searchName` e `skuNormalized` sao derivados e obrigatorios no schema.
+ */
+function buildProduct(
+  organizationId: string,
+  overrides: { name: string; sku?: string; salePriceCents?: number },
+) {
+  return {
+    organizationId,
+    name: overrides.name,
+    searchName: overrides.name.toLowerCase(),
+    sku: overrides.sku ?? null,
+    skuNormalized: overrides.sku?.toLowerCase() ?? null,
+    salePriceCents: overrides.salePriceCents ?? 100,
+  };
+}
 
 /**
  * Banco local SQLite.
@@ -60,7 +79,15 @@ describe('Banco local (SQLite)', () => {
         );
         const names = tables.map((row) => row.name);
 
-        for (const table of ['organizations', 'users', 'products', 'categories', 'app_settings']) {
+        for (const table of [
+          'organizations',
+          'users',
+          'products',
+          'categories',
+          'inventory_movements',
+          'inventory_balances',
+          'inventory_counts',
+        ]) {
           expect(names).toContain(table);
         }
       } finally {
@@ -131,17 +158,12 @@ describe('Banco local (SQLite)', () => {
       const tenant = await seedTenant(prisma);
 
       await prisma.product.create({
-        data: { organizationId: tenant.organizationId, name: 'A', sku: 'DUP', salePriceCents: 100 },
+        data: buildProduct(tenant.organizationId, { name: 'A', sku: 'DUP' }),
       });
 
       await expect(
         prisma.product.create({
-          data: {
-            organizationId: tenant.organizationId,
-            name: 'B',
-            sku: 'DUP',
-            salePriceCents: 200,
-          },
+          data: buildProduct(tenant.organizationId, { name: 'B', sku: 'DUP' }),
         }),
       ).rejects.toThrow();
     });
@@ -151,12 +173,12 @@ describe('Banco local (SQLite)', () => {
       const b = await seedTenant(prisma);
 
       await prisma.product.create({
-        data: { organizationId: a.organizationId, name: 'A', sku: 'MESMO', salePriceCents: 100 },
+        data: buildProduct(a.organizationId, { name: 'A', sku: 'MESMO' }),
       });
 
       await expect(
         prisma.product.create({
-          data: { organizationId: b.organizationId, name: 'B', sku: 'MESMO', salePriceCents: 100 },
+          data: buildProduct(b.organizationId, { name: 'B', sku: 'MESMO' }),
         }),
       ).resolves.toBeDefined();
     });
@@ -165,11 +187,7 @@ describe('Banco local (SQLite)', () => {
       // Sem PRAGMA foreign_keys=ON o SQLite aceitaria silenciosamente.
       await expect(
         prisma.product.create({
-          data: {
-            organizationId: 'organizacao-que-nao-existe',
-            name: 'Orfao',
-            salePriceCents: 100,
-          },
+          data: buildProduct('organizacao-que-nao-existe', { name: 'Orfao' }),
         }),
       ).rejects.toThrow();
     });
@@ -178,7 +196,7 @@ describe('Banco local (SQLite)', () => {
       const tenant = await seedTenant(prisma);
 
       await prisma.product.create({
-        data: { organizationId: tenant.organizationId, name: 'Produto', salePriceCents: 100 },
+        data: buildProduct(tenant.organizationId, { name: 'Produto' }),
       });
 
       await prisma.organization.delete({ where: { id: tenant.organizationId } });
@@ -193,7 +211,7 @@ describe('Banco local (SQLite)', () => {
       const b = await seedTenant(prisma, { name: 'Beta' });
 
       await prisma.product.create({
-        data: { organizationId: a.organizationId, name: 'Produto da Alfa', salePriceCents: 100 },
+        data: buildProduct(a.organizationId, { name: 'Produto da Alfa' }),
       });
 
       const visibleToB = await prisma.product.findMany({
@@ -208,11 +226,9 @@ describe('Banco local (SQLite)', () => {
 
       // 1000 itens de R$ 19,99: em ponto flutuante a soma derivaria.
       await prisma.product.createMany({
-        data: Array.from({ length: 1000 }, (_, index) => ({
-          organizationId: tenant.organizationId,
-          name: `Item ${index}`,
-          salePriceCents: 1999,
-        })),
+        data: Array.from({ length: 1000 }, (_, index) =>
+          buildProduct(tenant.organizationId, { name: `Item ${index}`, salePriceCents: 1999 }),
+        ),
       });
 
       const total = await prisma.product.aggregate({

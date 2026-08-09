@@ -22,3 +22,9 @@ apps/desktop/build/
 
 # Export estatico do renderer
 apps/web/out/
+
+# Banco de desenvolvimento: binario, muda a cada seed e carrega dados locais.
+# O schema versionado sao as migrations, nao o .db.
+apps/api/prisma/*.db
+apps/api/prisma/*.db-shm
+apps/api/prisma/*.db-wal

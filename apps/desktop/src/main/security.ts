@@ -1,5 +1,5 @@
 import { shell, type BrowserWindow, type Session } from 'electron';
-import { ALLOWED_ORIGINS, BACKEND_ORIGIN, DEV_RENDERER_URL, USE_DEV_SERVER } from '../shared/config';
+import { ALLOWED_ORIGINS, backendOrigin, DEV_RENDERER_URL, USE_DEV_SERVER } from '../shared/config';
 import { createLogger } from '../shared/logger';
 
 const log = createLogger('security');
@@ -67,7 +67,7 @@ export function applyContentSecurityPolicy(session: Session): void {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    `connect-src 'self' ${BACKEND_ORIGIN}${devConnect}`,
+    `connect-src 'self' ${backendOrigin()}${devConnect}`,
     "object-src 'none'",
     "frame-ancestors 'none'",
     "base-uri 'self'",

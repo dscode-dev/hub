@@ -4,7 +4,9 @@ import type { Paginated, ProductDto } from '@hub/shared';
 import { EmptyState } from '@/components/common/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { formatCurrency, formatQuantity } from '@/lib/format';
+import { StockBadge } from '@/components/inventory/stock-badge';
+import { formatCurrency } from '@/lib/format';
+import { formatStock } from '@/lib/inventory/format';
 import { productDetailRoute } from '@/lib/routes';
 import { ProductsPagination } from './products-pagination';
 
@@ -100,9 +102,7 @@ export function ProductsTable({ products, meta, search, showingInactive }: Produ
                   <span className="text-sm font-semibold text-foreground tabular">
                     {formatCurrency(product.salePrice)}
                   </span>
-                  {product.trackInventory ? (
-                    <StockBadge product={product} />
-                  ) : null}
+                  <StockBadge status={product.inventory.status} />
                 </span>
               </span>
 
@@ -128,6 +128,9 @@ export function ProductsTable({ products, meta, search, showingInactive }: Produ
               </th>
               <th scope="col" className="px-5 py-3 text-right">
                 Estoque
+              </th>
+              <th scope="col" className="px-5 py-3">
+                Status
               </th>
               <th scope="col" className="px-5 py-3 text-right">
                 Preco
@@ -159,12 +162,16 @@ export function ProductsTable({ products, meta, search, showingInactive }: Produ
                   {product.sku ?? '—'}
                 </td>
 
-                <td className="px-5 py-3 text-right">
+                <td className="px-5 py-3 text-right tabular">
                   {product.trackInventory ? (
-                    <StockBadge product={product} />
+                    formatStock(product.inventory.quantity, product.unit)
                   ) : (
-                    <span className="text-foreground-subtle">Nao controla</span>
+                    <span className="text-foreground-subtle">—</span>
                   )}
+                </td>
+
+                <td className="px-5 py-3">
+                  <StockBadge status={product.inventory.status} />
                 </td>
 
                 <td className="px-5 py-3 text-right font-medium text-foreground tabular">
@@ -188,18 +195,5 @@ export function ProductsTable({ products, meta, search, showingInactive }: Produ
 
       <ProductsPagination meta={meta} />
     </div>
-  );
-}
-
-/** Sinaliza estoque abaixo do minimo sem exigir que o usuario compare numeros. */
-function StockBadge({ product }: { product: ProductDto }) {
-  const low =
-    product.minStockQuantity !== null && product.stockQuantity <= product.minStockQuantity;
-
-  return (
-    <Badge variant={low ? 'warning' : 'neutral'} className="tabular">
-      {formatQuantity(product.stockQuantity)}
-      {low ? ' · baixo' : ''}
-    </Badge>
   );
 }

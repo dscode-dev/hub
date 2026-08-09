@@ -18,8 +18,23 @@ interface ErrorBody {
   message: string;
   /** Erros por campo, no formato consumido diretamente pelos formularios. */
   fieldErrors?: Record<string, string[]>;
+  /**
+   * Itens cujo saldo mudou durante uma contagem de inventario.
+   *
+   * Passa pelo filtro porque "algo mudou, revise" sem dizer o que mudou obriga
+   * o operador a recontar tudo. A lista e o que permite revisar so o que saiu
+   * do lugar.
+   */
+  conflicts?: CountConflict[];
   path: string;
   timestamp: string;
+}
+
+interface CountConflict {
+  productId: string;
+  productName: string;
+  expected: number;
+  current: number;
 }
 
 /**
@@ -58,7 +73,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
         return { statusCode: status, message: payload, path, timestamp };
       }
 
-      const record = payload as { message?: string | string[]; fieldErrors?: unknown };
+      const record = payload as {
+        message?: string | string[];
+        fieldErrors?: unknown;
+        conflicts?: unknown;
+      };
       const rawMessage = record.message;
 
       return {
@@ -67,6 +86,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
           ? (rawMessage[0] ?? 'Requisicao invalida')
           : (rawMessage ?? exception.message),
         fieldErrors: this.isFieldErrors(record.fieldErrors) ? record.fieldErrors : undefined,
+        conflicts: this.isConflicts(record.conflicts) ? record.conflicts : undefined,
         path,
         timestamp,
       };
@@ -145,5 +165,20 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
   private isFieldErrors(value: unknown): value is Record<string, string[]> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
+  }
+
+  private isConflicts(value: unknown): value is CountConflict[] {
+    return (
+      Array.isArray(value) &&
+      value.every(
+        (item) =>
+          typeof item === 'object' &&
+          item !== null &&
+          typeof (item as CountConflict).productId === 'string' &&
+          typeof (item as CountConflict).productName === 'string' &&
+          typeof (item as CountConflict).expected === 'number' &&
+          typeof (item as CountConflict).current === 'number',
+      )
+    );
   }
 }

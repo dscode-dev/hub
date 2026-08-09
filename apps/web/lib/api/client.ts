@@ -78,3 +78,4 @@ export const apiClient = {
 };
 
 export { ApiError };
+export type { CountConflict } from './errors';

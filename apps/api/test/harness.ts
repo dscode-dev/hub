@@ -32,6 +32,10 @@ export async function createTestApp(): Promise<TestContext> {
  * em vez de mascarar um problema de modelagem.
  */
 const TABLES_IN_DELETE_ORDER = [
+  'inventory_count_items',
+  'inventory_counts',
+  'inventory_movements',
+  'inventory_balances',
   'import_jobs',
   'audit_logs',
   'products',
@@ -40,7 +44,6 @@ const TABLES_IN_DELETE_ORDER = [
   'users',
   'organizations',
   'instance_setup',
-  'app_settings',
 ];
 
 export async function resetDatabase(prisma: PrismaService): Promise<void> {

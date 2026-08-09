@@ -14,10 +14,12 @@ import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { HealthController } from './health.controller';
+import { InventoryModule } from './modules/inventory/inventory.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { ProductsModule } from './modules/products/products.module';
 import { SetupModule } from './modules/setup/setup.module';
 import { SystemModule } from './modules/system/system.module';
+import { UnitsModule } from './modules/units/units.module';
 
 @Module({
   imports: [
@@ -39,8 +41,10 @@ import { SystemModule } from './modules/system/system.module';
     AuthModule,
     OrganizationsModule,
     CategoriesModule,
+    InventoryModule,
     ProductsModule,
     SetupModule,
+    UnitsModule,
     SystemModule,
   ],
   controllers: [HealthController],

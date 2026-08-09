@@ -16,17 +16,41 @@ export const APP_SCHEME = 'hub';
 export const APP_ORIGIN = `${APP_SCHEME}://app`;
 
 /**
- * Porta do backend local. Configuravel por ambiente para permitir, no futuro,
- * deteccao automatica de porta livre sem tocar no restante do codigo.
+ * Porta preferida do backend local. E so uma preferencia: se estiver ocupada,
+ * `resolveBackendPort` escolhe outra livre. Porta fixa faria o app se recusar a
+ * abrir em qualquer maquina onde algo ja use a 3001 - e o usuario nao tem como
+ * saber que precisa liberar uma porta.
  */
-export const BACKEND_PORT = Number(process.env.HUB_BACKEND_PORT ?? 3001);
+export const PREFERRED_BACKEND_PORT = Number(process.env.HUB_BACKEND_PORT ?? 3001);
 
 /** Loopback explicito: o backend do PDV nao deve escutar na rede local. */
 export const BACKEND_HOST = '127.0.0.1';
 
-export const BACKEND_ORIGIN = `http://${BACKEND_HOST}:${BACKEND_PORT}`;
-export const BACKEND_API_BASE = `${BACKEND_ORIGIN}/api/v1`;
-export const BACKEND_HEALTH_URL = `${BACKEND_API_BASE}/health`;
+/**
+ * Porta efetivamente em uso. Definida uma unica vez no boot, antes da CSP e do
+ * spawn do backend, porque ambos derivam a origem dela.
+ */
+let backendPort = PREFERRED_BACKEND_PORT;
+
+export function setBackendPort(port: number): void {
+  backendPort = port;
+}
+
+export function getBackendPort(): number {
+  return backendPort;
+}
+
+export function backendOrigin(): string {
+  return `http://${BACKEND_HOST}:${backendPort}`;
+}
+
+export function backendApiBase(): string {
+  return `${backendOrigin()}/api/v1`;
+}
+
+export function backendHealthUrl(): string {
+  return `${backendApiBase()}/health`;
+}
 
 export const DEV_RENDERER_URL = process.env.HUB_DEV_RENDERER_URL ?? 'http://localhost:3000';
 

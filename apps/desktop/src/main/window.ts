@@ -2,7 +2,7 @@ import { BrowserWindow, nativeImage } from 'electron';
 import { join } from 'node:path';
 import {
   APP_ORIGIN,
-  BACKEND_API_BASE,
+  backendApiBase,
   DEV_RENDERER_URL,
   USE_DEV_SERVER,
   resolvePaths,
@@ -85,7 +85,7 @@ export function createMainWindow(): BrowserWindow {
        * Entrega a URL da API ao preload de forma sincrona. Evita que o renderer
        * precise de um round-trip de IPC so para saber onde fica o backend.
        */
-      additionalArguments: [`--hub-api-base=${BACKEND_API_BASE}`],
+      additionalArguments: [`--hub-api-base=${backendApiBase()}`],
     },
   });
 

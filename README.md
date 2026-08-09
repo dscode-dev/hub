@@ -342,6 +342,79 @@ nunca requisito.
 
 ---
 
+## Estoque
+
+### O princípio
+
+**Estoque não é um número editável.** O saldo é sempre consequência de movimentações,
+nunca um campo que se sobrescreve. Não existe caminho no sistema que faça
+`UPDATE inventory SET quantity = 8`.
+
+O motivo é prático: saldo errado *com* histórico é um problema que se investiga e conserta;
+saldo errado *sem* histórico é um problema que ninguém consegue nem descrever. Quando o
+estoque não bate — e uma hora não bate — a única pergunta útil é "o que aconteceu com esse
+item?", e ela só tem resposta se cada alteração tiver deixado rastro.
+
+### As três tabelas
+
+| Tabela                | Papel                                                                 |
+| --------------------- | --------------------------------------------------------------------- |
+| `inventory_movements` | o ledger: fonte da verdade, append-only, sem update nem delete         |
+| `inventory_balances`  | projeção 1-1 com o produto, escrita na mesma transação do movimento    |
+| `inventory_counts`    | contagem física, com snapshot do saldo esperado no momento da abertura |
+
+A projeção existe por performance: sem ela, listar 500 produtos exigiria somar o ledger
+inteiro de cada um. Ela nunca é autoridade — `recomputeBalance()` reconstrói o saldo a
+partir dos movimentos, e em qualquer divergência o ledger vence.
+
+Cada movimento guarda `balanceAfterMilli`, o saldo logo após ele. É o que permite ao extrato
+mostrar a evolução sem recalcular nada, e o que torna uma inconsistência visível a olho nu.
+
+### Sinal, tipo e direção
+
+O cliente sempre envia quantidade **positiva**. O sinal vem do tipo do movimento, via
+`MOVEMENT_DIRECTION` — quem chama a API nunca decide se algo soma ou subtrai. `SALE` e
+`INITIAL_STOCK` não podem ser lançados manualmente: são gerados pelo sistema.
+
+### Estoque negativo
+
+Bloqueado por padrão. `Organization.allowNegativeInventory` libera, para quem vende antes
+de dar entrada na nota. Quando bloqueia, a transação inteira é desfeita: nem movimento, nem
+saldo alterado, e a mensagem diz quanto há disponível.
+
+### Unidade de medida
+
+Todo produto tem unidade; sem escolha explícita, "UN". A unidade decide se fração faz
+sentido: 2,5 kg é normal, 2,5 peças não é. A checagem mora no ledger, o único caminho que
+altera saldo — então vale igualmente para movimento avulso, estoque inicial, contagem e
+importação.
+
+### Inventário (contagem física)
+
+Ao abrir, o saldo de cada produto é **congelado** como `expectedQuantityMilli`. A comparação
+final é sempre contra esse snapshot, nunca contra o saldo atual.
+
+Se o saldo mudar entre a abertura e a conclusão — uma venda no balcão durante a contagem —
+concluir devolve **409** com a lista dos itens que mudaram, incluindo o valor esperado e o
+atual. Aplicar a diferença antiga apagaria essa venda. A conclusão é tudo ou nada: com
+qualquer conflito, nenhum ajuste é aplicado.
+
+A contagem é **cega** na interface: o saldo do sistema não aparece enquanto se conta. Ver o
+número esperado enviesa o resultado — a tendência é confirmar o que o sistema diz em vez de
+contar. A comparação aparece na revisão, que é onde ela serve para decidir.
+
+### Busca
+
+SQLite não tem colação Unicode: `LIKE` não casa "sofa" com "SOFÁ". Colunas normalizadas
+(`searchName`, `skuNormalized`) guardam a forma sem acento e em minúsculas, e a busca roda
+sobre elas. O texto que o usuário vê nunca é alterado. `normalizeCode` remove também os
+não-alfanuméricos, então `sof01` encontra o SKU `SOF-01`.
+
+A unicidade usa as mesmas colunas: cadastrar "Eletrônicos" e "eletronicos" como categorias
+diferentes seria um erro de digitação virando dado duplicado.
+
+---
+
 ## Segurança
 
 ### Janela
@@ -352,6 +425,30 @@ em **todas** as janelas — incluindo splash e tela de erro.
 Navegação externa é bloqueada (`will-navigate`, `will-redirect`, `setWindowOpenHandler`);
 links http/https saem por `shell.openExternal`, outros protocolos são recusados.
 Permissões de mídia/geolocalização são negadas por padrão.
+
+### Segredo de assinatura dos tokens
+
+Em desenvolvimento o backend lê `JWT_ACCESS_SECRET` do `.env`. O aplicativo instalado não
+tem `.env`, e **embutir um segredo no pacote seria pior do que não ter nenhum**: o mesmo
+valor estaria em todas as máquinas, extraível do instalador, e permitiria forjar um token
+válido em qualquer cliente.
+
+Cada instalação gera o próprio segredo (64 bytes aleatórios) no primeiro boot e o guarda em
+`userData/secure/backend-secret.bin`, cifrado pelo `safeStorage` (Keychain / DPAPI /
+libsecret), com permissão `0600`. Sem cofre do SO, grava em texto puro com a mesma permissão
+restrita — a alternativa seria o app simplesmente não abrir.
+
+O segredo é estável entre reinícios: trocá-lo invalidaria toda sessão e exigiria login a
+cada abertura. Ele nunca é logado, nem na inicialização do backend.
+
+### Porta do backend
+
+3001 é preferência, não requisito. Se estiver ocupada, o Main Process pede uma porta livre
+ao sistema antes de aplicar a CSP e subir o backend — a origem do `connect-src` inclui a
+porta, então ela precisa estar decidida antes. Porta fixa faria o app se recusar a abrir em
+qualquer máquina onde algo já use a 3001, sem que o usuário tivesse como adivinhar o motivo.
+
+O backend escuta sempre em `127.0.0.1`: nunca fica exposto na rede local.
 
 ### Preload
 
@@ -482,7 +579,11 @@ Process.
 | URL da API            | `additionalArguments` no preload                | disponível de forma síncrona, sem round-trip de IPC no boot          |
 | Watchdog no backend   | filho monitora o pai                            | SIGKILL no Electron não roda handler algum; sem isso sobraria órfão  |
 | Backend empacotado    | staging com deps de produção                    | hoisting do workspace deixa `apps/api/node_modules` vazio            |
-| Banco                 | PostgreSQL mantido                              | migração para SQLite local é passo seguinte, não deste               |
+| Banco                 | SQLite local via Prisma                         | instala sem depender de servidor de banco na máquina do cliente      |
+| Dinheiro / quantidade | inteiros (centavos / milésimos)                 | SQLite não tem decimal real; `DECIMAL` vira float e acumula erro     |
+| Saldo de estoque      | ledger + projeção, nunca campo editável         | saldo errado com histórico é auditável; saldo errado sem histórico não |
+| Porta do backend      | preferida 3001, com fallback para porta livre   | porta fixa impediria o app de abrir onde algo já usa a 3001          |
+| Segredo JWT           | gerado por instalação, guardado no `safeStorage` | segredo embutido no pacote seria o mesmo em todas as máquinas        |
 
 ---
 

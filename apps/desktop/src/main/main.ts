@@ -1,9 +1,11 @@
 import { app, session } from 'electron';
 import { registerIpcHandlers } from '../ipc/register-ipc';
+import { PREFERRED_BACKEND_PORT, setBackendPort } from '../shared/config';
 import { createLogger } from '../shared/logger';
 import { bootstrap, focusExistingWindow, registerLifecycleHandlers } from './app-lifecycle';
 import { registerAppScheme } from './protocol';
 import { applyContentSecurityPolicy } from './security';
+import { resolveBackendPort } from './port';
 
 const log = createLogger('main');
 
@@ -28,8 +30,14 @@ if (!app.requestSingleInstanceLock()) {
   registerAppScheme();
 
   app.whenReady().then(
-    () => {
+    async () => {
       log.info('Electron pronto', { version: app.getVersion(), platform: process.platform });
+
+      /*
+       * A porta precisa ser decidida antes da CSP e do backend: a CSP autoriza
+       * `connect-src` para uma origem especifica, e ela inclui a porta.
+       */
+      setBackendPort(await resolveBackendPort(PREFERRED_BACKEND_PORT));
 
       applyContentSecurityPolicy(session.defaultSession);
       registerIpcHandlers();

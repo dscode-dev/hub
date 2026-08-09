@@ -15,6 +15,8 @@ const prisma = new PrismaClient();
 const OWNER_EMAIL = 'owner@plataformahub.local';
 const OWNER_PASSWORD = 'Hub@123456';
 const DEMO_ORG_ID = '00000000-0000-4000-8000-000000000001';
+/** Unidade padrao criada pela migration de unidades. */
+const UNIT_UN = '00000000-0000-4000-9000-000000000001';
 
 const CATEGORIES = [
   { name: 'Geral', description: 'Categoria padrao para produtos ainda nao classificados' },
@@ -32,6 +34,8 @@ const PRODUCTS = [
 ];
 
 const toCents = (value: number): number => Math.round(Number((value * 100).toFixed(6)));
+const normalize = (value: string): string =>
+  value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
 const toMilli = (value: number): number => Math.round(Number((value * 1000).toFixed(6)));
 
 async function main(): Promise<void> {
@@ -71,11 +75,17 @@ async function main(): Promise<void> {
 
   for (const category of CATEGORIES) {
     const created = await prisma.category.upsert({
-      where: { organizationId_name: { organizationId: organization.id, name: category.name } },
+      where: {
+        organizationId_nameNormalized: {
+          organizationId: organization.id,
+          nameNormalized: normalize(category.name),
+        },
+      },
       update: { description: category.description },
       create: {
         organizationId: organization.id,
         name: category.name,
+        nameNormalized: normalize(category.name),
         description: category.description,
       },
     });
@@ -86,21 +96,70 @@ async function main(): Promise<void> {
   for (const product of PRODUCTS) {
     const categoryId = product.category ? (categoryIds.get(product.category) ?? null) : null;
 
-    await prisma.product.upsert({
-      where: { organizationId_sku: { organizationId: organization.id, sku: product.sku } },
+    const created = await prisma.product.upsert({
+      where: {
+        organizationId_skuNormalized: {
+          organizationId: organization.id,
+          skuNormalized: normalize(product.sku).replace(/\s+/g, ''),
+        },
+      },
       update: {},
       create: {
         organizationId: organization.id,
         categoryId,
+        unitId: UNIT_UN,
         name: product.name,
+        searchName: normalize(product.name),
         sku: product.sku,
+        skuNormalized: normalize(product.sku).replace(/\s+/g, ''),
         salePriceCents: toCents(product.salePrice),
         costPriceCents: product.costPrice === null ? null : toCents(product.costPrice),
         trackInventory: product.stock !== null,
-        stockQuantityMilli: toMilli(product.stock ?? 0),
-        minStockQuantityMilli: product.stock !== null ? toMilli(3) : null,
+        minimumStockMilli: product.stock !== null ? toMilli(3) : null,
       },
+      select: { id: true },
     });
+
+    /*
+     * Estoque inicial tambem no seed passa pelo ledger: o saldo nunca e
+     * escrito direto, nem em desenvolvimento. Assim o ambiente de dev exercita
+     * exatamente o mesmo caminho da instalacao real.
+     */
+    if (product.stock !== null) {
+      const alreadySeeded = await prisma.inventoryMovement.findFirst({
+        where: { productId: created.id, type: 'INITIAL_STOCK' },
+        select: { id: true },
+      });
+
+      if (!alreadySeeded) {
+        const quantityMilli = toMilli(product.stock);
+
+        await prisma.$transaction(async (tx) => {
+          await tx.inventoryMovement.create({
+            data: {
+              organizationId: organization.id,
+              productId: created.id,
+              type: 'INITIAL_STOCK',
+              quantityMilli,
+              balanceAfterMilli: quantityMilli,
+              reason: 'Estoque inicial (seed de desenvolvimento)',
+              createdByUserId: owner.id,
+            },
+          });
+
+          await tx.inventoryBalance.upsert({
+            where: { productId: created.id },
+            create: {
+              organizationId: organization.id,
+              productId: created.id,
+              quantityMilli,
+              lastMovementAt: new Date(),
+            },
+            update: { quantityMilli, lastMovementAt: new Date() },
+          });
+        });
+      }
+    }
   }
 
   console.log('Seed de desenvolvimento concluido.');

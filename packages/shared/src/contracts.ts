@@ -1,5 +1,6 @@
 import type { OperationGoal } from './operation-goals';
 import type { UserRole } from './roles';
+import type { ProductInventoryDto, UnitOfMeasureDto } from './inventory';
 import type { BusinessSegment } from './setup';
 
 /** Envelope padrao de listagens paginadas da API. */
@@ -88,8 +89,12 @@ export interface ProductDto {
   salePrice: number;
   active: boolean;
   trackInventory: boolean;
-  stockQuantity: number;
-  minStockQuantity: number | null;
+  unit: UnitOfMeasureDto | null;
+  /**
+   * Estoque derivado do ledger. Sempre presente - para produto sem controle,
+   * o status e NOT_TRACKED e a quantidade e zero.
+   */
+  inventory: ProductInventoryDto;
   createdAt: string;
   updatedAt: string;
 }
@@ -106,9 +111,13 @@ export interface ImportPreviewRow {
   valid: boolean;
   name: string | null;
   sku: string | null;
+  barcode: string | null;
   categoryName: string | null;
+  unitCode: string | null;
   salePrice: number | null;
+  costPrice: number | null;
   stockQuantity: number | null;
+  minimumStock: number | null;
   errors: string[];
 }
 
@@ -122,15 +131,7 @@ export interface ImportUploadResponseDto {
   suggestedMapping: ImportFieldMapping;
 }
 
-export interface ImportFieldMapping {
-  name?: string | null;
-  salePrice?: string | null;
-  sku?: string | null;
-  categoryName?: string | null;
-  stockQuantity?: string | null;
-  costPrice?: string | null;
-  barcode?: string | null;
-}
+export type ImportFieldMapping = Partial<Record<ImportableProductField, string | null>>;
 
 export interface ImportPreviewResponseDto {
   importId: string;
@@ -152,10 +153,12 @@ export const IMPORTABLE_PRODUCT_FIELDS = [
   'name',
   'salePrice',
   'sku',
-  'categoryName',
-  'stockQuantity',
-  'costPrice',
   'barcode',
+  'categoryName',
+  'unitCode',
+  'costPrice',
+  'stockQuantity',
+  'minimumStock',
 ] as const;
 
 export type ImportableProductField = (typeof IMPORTABLE_PRODUCT_FIELDS)[number];
@@ -164,10 +167,12 @@ export const IMPORTABLE_PRODUCT_FIELD_LABELS: Record<ImportableProductField, str
   name: 'Nome do produto',
   salePrice: 'Preco de venda',
   sku: 'SKU / Codigo',
-  categoryName: 'Categoria',
-  stockQuantity: 'Estoque inicial',
-  costPrice: 'Preco de custo',
   barcode: 'Codigo de barras',
+  categoryName: 'Categoria',
+  unitCode: 'Unidade (UN, KG, CX...)',
+  costPrice: 'Preco de custo',
+  stockQuantity: 'Estoque inicial',
+  minimumStock: 'Estoque minimo',
 };
 
 /** Campos sem os quais uma linha do CSV nao pode virar produto. */

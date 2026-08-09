@@ -3,17 +3,33 @@ export interface ApiErrorBody {
   statusCode: number;
   message: string;
   fieldErrors?: Record<string, string[]>;
+  conflicts?: CountConflict[];
+}
+
+/** Item cujo saldo mudou entre a abertura e a conclusao de uma contagem. */
+export interface CountConflict {
+  productId: string;
+  productName: string;
+  expected: number;
+  current: number;
 }
 
 export class ApiError extends Error {
   readonly status: number;
   readonly fieldErrors: Record<string, string[]>;
+  readonly conflicts: CountConflict[];
 
-  constructor(status: number, message: string, fieldErrors: Record<string, string[]> = {}) {
+  constructor(
+    status: number,
+    message: string,
+    fieldErrors: Record<string, string[]> = {},
+    conflicts: CountConflict[] = [],
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.fieldErrors = fieldErrors;
+    this.conflicts = conflicts;
   }
 
   get isUnauthorized(): boolean {
@@ -38,6 +54,7 @@ export async function toApiError(response: Response): Promise<ApiError> {
     response.status,
     body.message ?? mensagemPadrao(response.status),
     body.fieldErrors ?? {},
+    body.conflicts ?? [],
   );
 }
 

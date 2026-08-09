@@ -12,7 +12,10 @@ import type {
 import { PrismaService } from '@/common/prisma/prisma.service';
 import type { AuthenticatedUser } from '@/common/types/authenticated-user';
 import { parseHumanNumber } from '@/common/utils/decimal';
-import { toCents, toMilli } from '@/common/utils/money';
+import { toCents, toCentsOrNull, toMilli, toMilliOrNull } from '@/common/utils/money';
+import { normalizeBarcode, normalizeCode, normalizeSearchText } from '@/common/utils/normalize';
+import { InventoryLedgerService } from '@/modules/inventory/inventory-ledger.service';
+import { MOVEMENT_REFERENCE } from '@/modules/inventory/inventory-movement.types';
 import { AuditService } from '@/modules/audit/audit.service';
 import { CategoriesService } from '@/modules/categories/categories.service';
 import { decodeCsvBuffer, normalizeHeader, parseCsv } from './csv.util';
@@ -24,7 +27,9 @@ const HEADER_SYNONYMS: Record<ImportableProductField, string[]> = {
   salePrice: ['preco', 'precodevenda', 'valor', 'valorvenda', 'venda', 'price', 'saleprice'],
   sku: ['sku', 'codigo', 'codigointerno', 'referencia', 'ref', 'code'],
   categoryName: ['categoria', 'grupo', 'segmento', 'category', 'departamento'],
+  unitCode: ['unidade', 'un', 'unidademedida', 'unit', 'uom'],
   stockQuantity: ['quantidade', 'qtd', 'qtde', 'estoque', 'saldo', 'quantity', 'stock'],
+  minimumStock: ['estoqueminimo', 'minimo', 'qtdminima', 'minimum', 'minstock'],
   costPrice: ['custo', 'precodecusto', 'valorcusto', 'cost', 'costprice'],
   barcode: ['codigodebarras', 'ean', 'gtin', 'barcode', 'codbarras'],
 };
@@ -38,7 +43,25 @@ export class ProductImportService {
     private readonly prisma: PrismaService,
     private readonly categoriesService: CategoriesService,
     private readonly auditService: AuditService,
+    private readonly ledger: InventoryLedgerService,
   ) {}
+
+  /**
+   * Codigos de unidade validos, carregados uma vez por operacao.
+   * Evita uma consulta por linha do arquivo.
+   */
+  private knownUnitCodes = new Set<string>();
+  private unitIdByCode = new Map<string, string>();
+
+  private async loadUnits(organizationId: string): Promise<void> {
+    const units = await this.prisma.unitOfMeasure.findMany({
+      where: { active: true, OR: [{ organizationId: null }, { organizationId }] },
+      select: { id: true, code: true },
+    });
+
+    this.knownUnitCodes = new Set(units.map((unit) => unit.code.toUpperCase()));
+    this.unitIdByCode = new Map(units.map((unit) => [unit.code.toUpperCase(), unit.id]));
+  }
 
   /** Etapa 1 e 2: recebe o arquivo, le as colunas e sugere o mapeamento. */
   async upload(
@@ -82,6 +105,7 @@ export class ProductImportService {
     mapping: ImportFieldMappingDto,
   ): Promise<ImportPreviewResponseDto> {
     const { rows } = await this.loadJobRows(user.organizationId, importId);
+    await this.loadUnits(user.organizationId);
     const evaluated = rows.map((row, index) => this.evaluateRow(row, index, mapping));
     const validRows = evaluated.filter((row) => row.valid).length;
 
@@ -106,6 +130,7 @@ export class ProductImportService {
   ): Promise<ImportCommitResponseDto> {
     const organizationId = user.organizationId;
     const { rows } = await this.loadJobRows(organizationId, importId);
+    await this.loadUnits(organizationId);
 
     const errors: ImportRowError[] = [];
     let createdRows = 0;
@@ -153,16 +178,47 @@ export class ProductImportService {
 
         const trackInventory = evaluated.stockQuantity !== null;
 
-        await this.prisma.product.create({
-          data: {
-            organizationId,
-            name: evaluated.name,
-            salePriceCents: toCents(evaluated.salePrice),
-            sku,
-            categoryId,
-            trackInventory,
-            stockQuantityMilli: toMilli(evaluated.stockQuantity ?? 0),
-          },
+        /*
+         * Atomicidade POR LINHA: produto e estoque inicial entram juntos ou a
+         * linha inteira e reportada como erro. Assim uma linha problematica
+         * nunca deixa produto sem o movimento que explica o saldo, e as demais
+         * linhas do arquivo seguem normalmente.
+         */
+        await this.prisma.$transaction(async (tx) => {
+          const created = await tx.product.create({
+            data: {
+              organizationId,
+              name: evaluated.name!,
+              searchName: normalizeSearchText(evaluated.name!),
+              salePriceCents: toCents(evaluated.salePrice!),
+              costPriceCents: toCentsOrNull(evaluated.costPrice),
+              sku,
+              skuNormalized: sku ? normalizeCode(sku) : null,
+              barcode: evaluated.barcode ? normalizeBarcode(evaluated.barcode) : null,
+              categoryId,
+              unitId: evaluated.unitCode ? (this.unitIdByCode.get(evaluated.unitCode) ?? null) : null,
+              trackInventory,
+              minimumStockMilli: trackInventory ? toMilliOrNull(evaluated.minimumStock) : null,
+            },
+            select: { id: true },
+          });
+
+          if (trackInventory && (evaluated.stockQuantity ?? 0) > 0) {
+            await this.ledger.record(
+              {
+                organizationId,
+                productId: created.id,
+                type: 'INITIAL_STOCK',
+                quantityMilli: toMilli(evaluated.stockQuantity ?? 0),
+                unitCostCents: toCentsOrNull(evaluated.costPrice),
+                referenceType: MOVEMENT_REFERENCE.productImport,
+                referenceId: importId,
+                reason: 'Estoque inicial da importacao',
+                createdByUserId: user.id,
+              },
+              tx,
+            );
+          }
         });
 
         if (sku) {
@@ -259,17 +315,43 @@ export class ProductImportService {
       errors.push('Quantidade em estoque nao e um numero valido.');
     }
 
+    const rawCost = readColumn(row, mapping.costPrice);
+    const costPrice = rawCost ? parseHumanNumber(rawCost) : null;
+
+    if (rawCost && costPrice === null) {
+      errors.push('Preco de custo nao e um numero valido.');
+    }
+
+    const rawMinimum = readColumn(row, mapping.minimumStock);
+    const minimumStock = rawMinimum ? parseHumanNumber(rawMinimum) : null;
+
+    if (rawMinimum && minimumStock === null) {
+      errors.push('Estoque minimo nao e um numero valido.');
+    }
+
     const sku = readColumn(row, mapping.sku)?.trim() || null;
+    const barcode = readColumn(row, mapping.barcode)?.trim() || null;
     const categoryName = readColumn(row, mapping.categoryName)?.trim() || null;
+    const unitCode = readColumn(row, mapping.unitCode)?.trim().toUpperCase() || null;
+
+    // Unidade desconhecida invalida a linha: importar com a unidade errada
+    // silenciosamente produziria saldo com significado trocado.
+    if (unitCode && !this.knownUnitCodes.has(unitCode)) {
+      errors.push(`Unidade "${unitCode}" nao existe no sistema.`);
+    }
 
     return {
       line,
       valid: errors.length === 0,
       name,
       sku,
+      barcode,
       categoryName,
+      unitCode,
       salePrice: salePrice !== null && salePrice >= 0 ? salePrice : null,
+      costPrice,
       stockQuantity,
+      minimumStock,
       errors,
     };
   }

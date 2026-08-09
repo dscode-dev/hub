@@ -12,9 +12,11 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { apiClient, ApiError } from '@/lib/api/client';
 import { parseCurrencyInput } from '@/lib/format';
+import { formatStock } from '@/lib/inventory/format';
 import { productDetailRoute } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 import { CategoryPicker } from './category-picker';
+import { UnitPicker } from './unit-picker';
 
 interface ProductFormProps {
   mode: 'create' | 'edit';
@@ -26,9 +28,10 @@ interface FormState {
   salePrice: string;
   sku: string;
   categoryId: string | null;
+  unitId: string | null;
   trackInventory: boolean;
-  stockQuantity: string;
-  minStockQuantity: string;
+  initialQuantity: string;
+  minimumStock: string;
   barcode: string;
   costPrice: string;
   description: string;
@@ -42,11 +45,13 @@ function initialState(product?: ProductDto): FormState {
     salePrice: product ? String(product.salePrice).replace('.', ',') : '',
     sku: product?.sku ?? '',
     categoryId: product?.categoryId ?? null,
+    unitId: product?.unit?.id ?? null,
     trackInventory: product?.trackInventory ?? false,
-    stockQuantity: product?.trackInventory ? String(product.stockQuantity) : '',
-    minStockQuantity:
-      product?.minStockQuantity !== null && product?.minStockQuantity !== undefined
-        ? String(product.minStockQuantity)
+    // Estoque inicial so existe na criacao: depois disso o saldo e do ledger.
+    initialQuantity: '',
+    minimumStock:
+      product?.inventory.minimum !== null && product?.inventory.minimum !== undefined
+        ? String(product.inventory.minimum)
         : '',
     barcode: product?.barcode ?? '',
     costPrice:
@@ -144,20 +149,20 @@ export function ProductForm({ mode, product }: ProductFormProps) {
       errors.costPrice = 'Preco de custo invalido.';
     }
 
-    const stockQuantity = form.stockQuantity.trim()
-      ? parseCurrencyInput(form.stockQuantity)
+    const initialQuantity = form.initialQuantity.trim()
+      ? parseCurrencyInput(form.initialQuantity)
       : null;
 
-    if (form.trackInventory && form.stockQuantity.trim() && stockQuantity === null) {
-      errors.stockQuantity = 'Quantidade invalida.';
+    if (form.trackInventory && form.initialQuantity.trim() && initialQuantity === null) {
+      errors.initialQuantity = 'Quantidade invalida.';
     }
 
-    const minStockQuantity = form.minStockQuantity.trim()
-      ? parseCurrencyInput(form.minStockQuantity)
+    const minimumStock = form.minimumStock.trim()
+      ? parseCurrencyInput(form.minimumStock)
       : null;
 
-    if (form.trackInventory && form.minStockQuantity.trim() && minStockQuantity === null) {
-      errors.minStockQuantity = 'Estoque minimo invalido.';
+    if (form.trackInventory && form.minimumStock.trim() && minimumStock === null) {
+      errors.minimumStock = 'Estoque minimo invalido.';
     }
 
     return {
@@ -169,10 +174,14 @@ export function ProductForm({ mode, product }: ProductFormProps) {
         barcode: form.barcode.trim() || null,
         description: form.description.trim() || null,
         categoryId: form.categoryId,
+        unitId: form.unitId,
         costPrice,
         trackInventory: form.trackInventory,
-        stockQuantity: form.trackInventory ? (stockQuantity ?? 0) : 0,
-        minStockQuantity: form.trackInventory ? minStockQuantity : null,
+        // Estoque inicial vira movimento no backend; nao existe na edicao.
+        ...(mode === 'create' && form.trackInventory
+          ? { initialQuantity: initialQuantity ?? 0 }
+          : {}),
+        minimumStock: form.trackInventory ? minimumStock : null,
       },
     };
   };
@@ -299,6 +308,19 @@ export function ProductForm({ mode, product }: ProductFormProps) {
           </Field>
 
           <Field
+            label="Unidade de medida"
+            htmlFor="product-unit"
+            optional
+            hint="Como este item e vendido: unidade, quilo, caixa..."
+          >
+            <UnitPicker
+              id="product-unit"
+              value={form.unitId}
+              onChange={(unitId) => update('unitId', unitId)}
+            />
+          </Field>
+
+          <Field
             label="SKU"
             htmlFor="product-sku"
             optional
@@ -333,37 +355,54 @@ export function ProductForm({ mode, product }: ProductFormProps) {
 
         {form.trackInventory ? (
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Field
-              label={mode === 'create' ? 'Quantidade inicial' : 'Quantidade em estoque'}
-              htmlFor="product-stock"
-              error={fieldErrors.stockQuantity}
-            >
-              <Input
-                id="product-stock"
-                value={form.stockQuantity}
-                onChange={(event) => update('stockQuantity', event.target.value)}
-                placeholder="0"
-                inputMode="decimal"
-                className="tabular"
-                aria-invalid={Boolean(fieldErrors.stockQuantity)}
-              />
-            </Field>
+            {mode === 'create' ? (
+              <Field
+                label="Quantidade inicial"
+                htmlFor="product-initial"
+                error={fieldErrors.initialQuantity}
+                hint="Registrada como a primeira movimentacao do produto."
+              >
+                <Input
+                  id="product-initial"
+                  value={form.initialQuantity}
+                  onChange={(event) => update('initialQuantity', event.target.value)}
+                  placeholder="0"
+                  inputMode="decimal"
+                  className="tabular"
+                  aria-invalid={Boolean(fieldErrors.initialQuantity)}
+                />
+              </Field>
+            ) : (
+              /*
+               * Na edicao o saldo NAO e editavel: alterar o numero direto
+               * apagaria a explicacao dele. Quem muda estoque e a movimentacao.
+               */
+              <div className="rounded-lg bg-surface-muted p-3 text-sm">
+                <p className="text-foreground-muted">Saldo atual</p>
+                <p className="mt-0.5 font-semibold text-foreground tabular">
+                  {product ? formatStock(product.inventory.quantity, product.unit) : '—'}
+                </p>
+                <p className="mt-1 text-xs text-foreground-subtle">
+                  Ajuste pelo botao &ldquo;Ajustar estoque&rdquo; na pagina do produto.
+                </p>
+              </div>
+            )}
 
             <Field
               label="Estoque minimo"
               htmlFor="product-min-stock"
               optional
-              error={fieldErrors.minStockQuantity}
+              error={fieldErrors.minimumStock}
               hint="Avisamos quando o saldo chegar nesse numero."
             >
               <Input
                 id="product-min-stock"
-                value={form.minStockQuantity}
-                onChange={(event) => update('minStockQuantity', event.target.value)}
+                value={form.minimumStock}
+                onChange={(event) => update('minimumStock', event.target.value)}
                 placeholder="0"
                 inputMode="decimal"
                 className="tabular"
-                aria-invalid={Boolean(fieldErrors.minStockQuantity)}
+                aria-invalid={Boolean(fieldErrors.minimumStock)}
               />
             </Field>
           </div>
