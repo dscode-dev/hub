@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { Paginated, ProductDto } from '@hub/shared';
+import type { DashboardMetricsDto, Paginated, ProductDto } from '@hub/shared';
 import { ErrorState } from '@/components/common/error-state';
 import { useSession } from '@/components/session/session-provider';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import type { SetupStatus } from './types';
 interface DashboardData {
   setup: SetupStatus;
   recentProducts: ProductDto[];
+  metrics: DashboardMetricsDto;
 }
 
 export default function DashboardPage() {
@@ -27,14 +28,15 @@ export default function DashboardPage() {
     setFailed(false);
 
     try {
-      const [setup, products] = await Promise.all([
+      const [setup, products, metrics] = await Promise.all([
         apiClient.get<SetupStatus>('/organizations/me/setup-status'),
         apiClient.get<Paginated<ProductDto>>(
           '/products?pageSize=5&sortBy=createdAt&sortOrder=desc',
         ),
+        apiClient.get<DashboardMetricsDto>('/dashboard/metrics'),
       ]);
 
-      setData({ setup, recentProducts: products.data });
+      setData({ setup, recentProducts: products.data, metrics });
     } catch {
       setFailed(true);
     }
@@ -74,6 +76,7 @@ export default function DashboardPage() {
       greeting={firstName}
       setup={data.setup}
       recentProducts={data.recentProducts}
+      metrics={data.metrics}
     />
   );
 }

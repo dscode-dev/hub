@@ -137,9 +137,17 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       }
 
       setAccessToken(result.accessToken);
-      // Houve login: por construcao a instalacao tem dono.
-      setSetupRequired(false);
       const loaded = await loadSession();
+
+      /*
+       * Houve login: por construcao a instalacao tem dono.
+       *
+       * A ordem importa. Marcar isso ANTES de carregar a sessao criava uma
+       * janela em que o app ja se considerava configurado mas ainda nao
+       * autenticado - e o wizard de primeiro acesso era desmontado no meio do
+       * proprio login, piscando a tela de login antes do dashboard.
+       */
+      setSetupRequired(false);
 
       return loaded
         ? { ok: true }

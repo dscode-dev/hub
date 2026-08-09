@@ -22,7 +22,7 @@ export function AppShell({
 
   return (
     <div className="min-h-dvh bg-surface-subtle">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col gap-6 border-r border-line bg-surface px-3 py-4 lg:flex">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col gap-6 border-r border-line bg-surface px-3 py-4 lg:flex">
         <Link href="/dashboard" className="px-2 py-1">
           <HubLogo />
         </Link>
@@ -35,7 +35,7 @@ export function AppShell({
         </div>
       </aside>
 
-      <div className="lg:pl-60">
+      <div className="lg:pl-64">
         <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line bg-surface/95 px-4 backdrop-blur sm:px-6">
           <MobileNav />
 

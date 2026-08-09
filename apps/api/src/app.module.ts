@@ -14,6 +14,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { HealthController } from './health.controller';
+import { DashboardModule } from '@/modules/dashboard/dashboard.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { ProductsModule } from './modules/products/products.module';
@@ -41,6 +42,7 @@ import { UnitsModule } from './modules/units/units.module';
     AuthModule,
     OrganizationsModule,
     CategoriesModule,
+    DashboardModule,
     InventoryModule,
     ProductsModule,
     SetupModule,

@@ -342,6 +342,51 @@ nunca requisito.
 
 ---
 
+## Visao geral (dashboard)
+
+### O que e medido
+
+Todos os numeros vem do que a operacao registrou: catalogo, saldos e o ledger de estoque.
+`GET /dashboard/metrics` devolve KPIs, serie mensal, comparativo com o mes anterior,
+cobertura por categoria, produtos mais movimentados e alertas de reposicao.
+
+### O que NAO e medido
+
+**Nao ha metrica de venda**, porque nao ha venda no sistema — o modulo de PDV nao existe
+ainda. O contrato expoe `salesAvailable: false` e a interface reserva o espaco com uma
+explicacao, em vez de mostrar um grafico zerado.
+
+A diferenca importa: um grafico de vendas zerado se le como "voce nao vendeu nada"; o
+espaco reservado diz "ainda nao da para saber". Preencher o painel com numero inventado o
+tornaria inutil justamente para a decisao que ele deveria apoiar.
+
+Pela mesma razao, `stockValueCost` e `null` — e nao zero — quando nenhum produto tem custo
+cadastrado, e a variacao percentual e `null` quando nao existe mes anterior (dividir por
+zero diria "aumento infinito").
+
+### Graficos
+
+Desenhados em SVG, sem biblioteca de terceiros: sao duas formas (linha e radar), e uma
+dependencia custaria centenas de KB, traria o proprio vocabulario visual e ainda exigiria
+adaptacao aos tokens do design system. O `viewBox` e fixo e o SVG escala com o container,
+entao nada precisa medir o DOM.
+
+O radar de cobertura vira lista de barras com menos de tres categorias — com dois eixos o
+poligono degenera numa linha, e a leitura honesta ali e a lista.
+
+---
+
+## Navegacao
+
+O menu e agrupado por rotina de loja, nao por arquitetura: **Catalogo** (produtos, estoque,
+inventarios), **Vendas**, **Gestao**. Uma lista unica de nove itens obriga a ler tudo para
+achar qualquer coisa.
+
+Modulos que ainda nao existem continuam visiveis com o selo "em breve" e levam a uma pagina
+honesta — o usuario ve o alcance do produto e nao se assusta quando um modulo novo aparece.
+
+---
+
 ## Estoque
 
 ### O princípio
@@ -412,6 +457,19 @@ não-alfanuméricos, então `sof01` encontra o SKU `SOF-01`.
 
 A unicidade usa as mesmas colunas: cadastrar "Eletrônicos" e "eletronicos" como categorias
 diferentes seria um erro de digitação virando dado duplicado.
+
+---
+
+## Testes
+
+Cada arquivo de teste recebe o **proprio banco SQLite**, criado do zero pelo mesmo runner de
+migrations que roda na maquina do cliente. Com um arquivo unico compartilhado, o
+`DELETE FROM` do `beforeEach` de uma suite concorria com conexoes ainda abertas de outra e
+derrubava testes sem relacao entre si — um login falhando por 401, um PATCH achando 404 num
+produto criado no instante anterior. A instabilidade era de cerca de 25% das execucoes.
+
+Nao ha banco-template copiado de proposito: copiar so o `.db` deixaria para tras o `-wal`
+com os commits mais recentes, produzindo um arquivo parcialmente escrito.
 
 ---
 

@@ -1,32 +1,14 @@
-import { PrismaClient } from '@prisma/client';
-import { runMigrations } from '../src/database/migration-runner';
-import {
-  buildTestDatabaseUrl,
-  prepareTestDirectory,
-  removeTestDatabase,
-} from './test-database';
+import { prepareTestDirectory, removeTestDatabases } from './test-database';
 
 /**
- * Prepara o banco de testes uma unica vez por execucao.
+ * Limpa o diretorio de bancos antes da execucao.
  *
- * Usa o MESMO runner de migrations da aplicacao, e nao `prisma db push`. Se as
- * migrations quebrarem, os testes quebram junto - que e exatamente o sinal que
- * queremos antes de um build chegar ao cliente.
+ * Nao migra nada aqui: cada arquivo de teste recebe o proprio banco e o boot da
+ * aplicacao aplica as migrations com o MESMO runner de producao - e nao com
+ * `prisma db push`. Se as migrations quebrarem, os testes quebram junto, que e
+ * exatamente o sinal que queremos antes de um build chegar ao cliente.
  */
-export default async function globalSetup(): Promise<void> {
-  process.env.DATABASE_URL = buildTestDatabaseUrl();
-
-  // Cada execucao comeca de um banco novo: testa tambem a primeira execucao.
+export default function globalSetup(): void {
+  removeTestDatabases();
   prepareTestDirectory();
-  removeTestDatabase();
-
-  const prisma = new PrismaClient();
-
-  try {
-    await prisma.$connect();
-    await prisma.$queryRawUnsafe('PRAGMA foreign_keys = ON');
-    await runMigrations(prisma);
-  } finally {
-    await prisma.$disconnect();
-  }
 }

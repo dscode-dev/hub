@@ -2,11 +2,12 @@
  * Ambiente dos testes de integracao.
  *
  * Aponta para um SQLite temporario, nunca para o banco de desenvolvimento.
- * Carregado antes de qualquer import de aplicacao.
+ * Carregado antes de qualquer import de aplicacao - e uma vez por arquivo de
+ * teste, o que da a cada suite um banco proprio.
  */
-import { buildTestDatabaseUrl } from './test-database';
+import { createSuiteDatabase } from './test-database';
 
-process.env.DATABASE_URL = buildTestDatabaseUrl();
+process.env.DATABASE_URL = createSuiteDatabase();
 process.env.NODE_ENV = 'test';
 process.env.JWT_ACCESS_SECRET =
   process.env.JWT_ACCESS_SECRET ?? 'test-access-secret-com-mais-de-32-caracteres';

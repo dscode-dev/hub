@@ -4,6 +4,7 @@ import { hash } from 'bcryptjs';
 import type { UserRole } from '@hub/shared';
 import { AppModule } from '@/app.module';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { runMigrations } from '@/database/migration-runner';
 import { API_PREFIX } from '@/common/constants';
 import { configureApp } from '@/configure-app';
 
@@ -21,7 +22,18 @@ export async function createTestApp(): Promise<TestContext> {
   configureApp(app);
   await app.init();
 
-  return { app, prisma: app.get(PrismaService) };
+  const prisma = app.get(PrismaService);
+
+  /*
+   * Cada suite comeca de um arquivo SQLite vazio (ver `test-database.ts`),
+   * entao o schema e criado aqui - com o MESMO runner de migrations que roda
+   * na maquina do cliente, e nao com `prisma db push`. Migration quebrada
+   * derruba os testes, que e o sinal que queremos antes do build sair.
+   */
+  await prisma.$queryRawUnsafe('PRAGMA foreign_keys = ON');
+  await runMigrations(prisma);
+
+  return { app, prisma };
 }
 
 /**
